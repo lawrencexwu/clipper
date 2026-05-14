@@ -3,6 +3,7 @@ import {
   buildFrontmatter,
   bareDomain,
   nowIso,
+  parseFrontmatter,
   type Frontmatter,
 } from "../frontmatter.js";
 
@@ -70,5 +71,43 @@ describe("nowIso", () => {
     expect(nowIso()).toMatch(
       /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/
     );
+  });
+});
+
+describe("parseFrontmatter", () => {
+  it("round-trips a canonical build", () => {
+    const fm: Frontmatter = {
+      ...base,
+      tags: ["finance", "macro"],
+    };
+    const md = buildFrontmatter(fm) + "Body content here\n";
+    const parsed = parseFrontmatter(md);
+    expect(parsed.frontmatter).toEqual(fm);
+    expect(parsed.body).toBe("Body content here\n");
+  });
+
+  it("returns null frontmatter when delimiters are missing", () => {
+    expect(parseFrontmatter("Just body").frontmatter).toBeNull();
+  });
+
+  it("handles empty tags array", () => {
+    const fm: Frontmatter = { ...base, tags: [] };
+    const md = buildFrontmatter(fm) + "Body\n";
+    const parsed = parseFrontmatter(md);
+    expect(parsed.frontmatter?.tags).toEqual([]);
+  });
+
+  it("unescapes quoted values", () => {
+    const fm: Frontmatter = { ...base, title: 'She said "hi"' };
+    const md = buildFrontmatter(fm) + "Body\n";
+    const parsed = parseFrontmatter(md);
+    expect(parsed.frontmatter?.title).toBe('She said "hi"');
+  });
+
+  it("handles empty published", () => {
+    const fm: Frontmatter = { ...base, published: "" };
+    const md = buildFrontmatter(fm) + "Body\n";
+    const parsed = parseFrontmatter(md);
+    expect(parsed.frontmatter?.published).toBe("");
   });
 });

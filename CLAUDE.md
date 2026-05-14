@@ -111,7 +111,43 @@ The build orchestrator (`extension/build.mjs`) produces:
 
 ## Current phase
 
-**Phase 5 build-complete.** Per-site adapters + archive.ph fallback:
+**Phase 6 build-complete.** Library + search:
+
+- `shared/frontmatter.ts` — new `parseFrontmatter(markdown)` round-trips
+  every field `buildFrontmatter` emits (5 new tests). Unwraps quoted
+  scalars, parses inline arrays, handles empty `published`.
+- `extension/src/lib/library.ts` — clip index in `chrome.storage.local`
+  under `library.clips`. CRUD: `addClip`, `removeClip`, `updateClipMeta`,
+  `listClips`. Pure helpers: `applyFilters` (substring match across
+  title/source/author/tags + source/lang filters), `uniqueValues` (chip
+  bucket counts).
+- `extension/src/lib/fs.ts` — `readClip(dir, filename)` opens the file and
+  parses its frontmatter; `rewriteFrontmatter(dir, filename, nextFm)` reads,
+  swaps the frontmatter block, and writes back, preserving the body.
+- `extension/src/sidepanel/App.tsx` — header now has Current / Library
+  tabs. Save flow appends `ClipMeta` to the index after a successful disk
+  write. Library tab renders search input, source + lang filter chips
+  with counts, and a list of clips (newest first via insertion order in
+  the index). Clicking a row opens a viewer with the on-disk markdown,
+  a tag editor (chip UI with `+` input, Save button appears when dirty),
+  and a "Remove from library index" link.
+
+**Acceptance (real-Chrome verification):**
+
+- Clip 20+ articles across different sources. They appear in Library
+  newest-first.
+- Search filters by title / source / author / tag fragments.
+- Source + lang filter chips narrow the list.
+- Click a clip → loads markdown from disk → preview matches what got
+  saved.
+- Add a tag, click Save → file on disk has the new tag in frontmatter,
+  list entry shows the chip.
+
+**Next: Phase 7 — bookmarklet (Safari iOS + Mac).**
+
+---
+
+**Phase 5 complete.** Per-site adapters + archive.ph fallback:
 
 - `shared/adapters/x.ts` — `x.com` / `twitter.com`. Walks
   `article[data-testid="tweet"]` chains filtered to the URL's handle.
@@ -203,7 +239,7 @@ custom domains both detected).
 3. File System Access API integration (auto-save to chosen folder) — build ✅, pending in-browser smoke test
 4. AI actions (Claude.ai handoff + optional API key) — build ✅, pending in-browser smoke test
 5. Per-site adapters (X, Substack, NYT, archive.ph) — build ✅, pending in-browser smoke test
-6. Library + search (clip index, search/filter, tag editing)
+6. Library + search (clip index, search/filter, tag editing) — build ✅, pending in-browser smoke test
 7. Bookmarklet (Safari iOS + Mac)
 8. iOS Shortcut
 9. Claude Code skill

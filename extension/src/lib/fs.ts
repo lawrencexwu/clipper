@@ -1,5 +1,9 @@
 import { idbDelete, idbGet, idbSet } from "./idb.js";
-import type { Frontmatter } from "@shared/frontmatter.js";
+import {
+  buildFrontmatter,
+  parseFrontmatter,
+  type Frontmatter,
+} from "@shared/frontmatter.js";
 import { slugify } from "@shared/slug.js";
 
 const DIR_KEY = "clipsDir";
@@ -94,4 +98,42 @@ export async function saveClip(
   await writable.write(markdown);
   await writable.close();
   return finalName;
+}
+
+export interface ReadClipResult {
+  frontmatter: Frontmatter;
+  body: string;
+  markdown: string;
+}
+
+export async function readClip(
+  dir: FileSystemDirectoryHandle,
+  filename: string
+): Promise<ReadClipResult> {
+  const fileHandle = await dir.getFileHandle(filename);
+  const file = await fileHandle.getFile();
+  const markdown = await file.text();
+  const parsed = parseFrontmatter(markdown);
+  if (!parsed.frontmatter) {
+    throw new Error(`${filename}: no parseable frontmatter`);
+  }
+  return { frontmatter: parsed.frontmatter, body: parsed.body, markdown };
+}
+
+export async function rewriteFrontmatter(
+  dir: FileSystemDirectoryHandle,
+  filename: string,
+  next: Frontmatter
+): Promise<string> {
+  const fileHandle = await dir.getFileHandle(filename);
+  const file = await fileHandle.getFile();
+  const parsed = parseFrontmatter(await file.text());
+  if (!parsed.frontmatter) {
+    throw new Error(`${filename}: no parseable frontmatter`);
+  }
+  const newMarkdown = buildFrontmatter(next) + parsed.body;
+  const writable = await fileHandle.createWritable();
+  await writable.write(newMarkdown);
+  await writable.close();
+  return newMarkdown;
 }
