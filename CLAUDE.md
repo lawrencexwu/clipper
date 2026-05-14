@@ -106,16 +106,28 @@ npm run build:bookmarklet
 
 ## Current phase
 
-**Phase 0 complete.** Bootstrap done: `package.json`, `tsconfig.json`,
-`vite.config.ts`, `.gitignore`, folder structure, this file. `npm test` runs
-(no tests yet — framework only).
+**Phase 1 complete.** Shared extraction core implemented:
 
-**Next: Phase 1 — Shared extraction core.**
+- `shared/extractor.ts` — entry point, returns `{frontmatter, body, markdown}`
+- `shared/adapters/generic.ts` — Readability-based fallback
+- `shared/adapters/index.ts` — dispatcher (only `generic` registered until Phase 5)
+- `shared/markdown.ts` — Turndown with ATX headers, fenced code, inline links,
+  image alt preserved, empty `<p>` stripped (only when truly empty — not when
+  containing an `<img>`)
+- `shared/frontmatter.ts` — YAML emit, `bareDomain`, `nowIso` with local offset
+- `shared/slug.ts` — slugify keeping CJK; falls back to `untitled`
+- `shared/lang.ts` — heuristic CJK detection (en / zh / ja / other)
+- Fixtures: `generic-blog.html`, `substack-free.html`, `x-thread.html`,
+  `nyt-article.html` (synthetic but realistic)
+- 30 passing Vitest tests covering all of the above
+- `npm test` ✅, `npm run typecheck` ✅
+
+**Next: Phase 2 — Chrome extension MVP.**
 
 ## Phases (high-level)
 
 0. Bootstrap ✅
-1. Shared extraction core (generic Readability, markdown, frontmatter, slug, lang, tests)
+1. Shared extraction core (generic Readability, markdown, frontmatter, slug, lang, tests) ✅
 2. Chrome extension MVP (FAB, side panel, copy/download)
 3. File System Access API integration (auto-save to chosen folder)
 4. AI actions (Claude.ai handoff + optional API key)
@@ -138,4 +150,13 @@ npm run build:bookmarklet
 
 ## Gotchas / known issues
 
-(Empty — fill as discovered.)
+- **NYT byline not extracted by generic adapter.** The fixture uses
+  `meta[name="byl"]` (NYT-specific) instead of `meta[name="author"]`. Generic
+  Readability also misses it. Will be fixed by the NYT-specific adapter in
+  Phase 5.
+- **X/Twitter not usable via generic Readability.** The thread DOM has no
+  prose container Readability recognises. Pipeline runs without crashing but
+  output is empty / minimal. Per-site adapter is the fix (Phase 5).
+- **Fixtures are synthetic.** They mimic real DOM structures but were authored
+  for this repo, not scraped. After each adapter lands, re-test on 5+ live
+  pages and capture failures.
