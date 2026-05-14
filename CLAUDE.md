@@ -111,39 +111,38 @@ The build orchestrator (`extension/build.mjs`) produces:
 
 ## Current phase
 
-**Phase 2 build-complete.** Chrome MV3 extension assembled:
+**Phase 3 build-complete.** File System Access API integrated:
 
-- `extension/manifest.json` — MV3 with `sidePanel`, `activeTab`, `scripting`,
-  `storage`, content script on `<all_urls>`, ESM background worker
-- `extension/src/content/content.ts` — draggable FAB, position persisted
-  per-host via `chrome.storage.local["fab-pos:<host>"]`. Self-contained
-  (no imports) so it bundles to a clean IIFE.
-- `extension/src/background.ts` — `sidePanel.open` on icon click and on
-  `open-side-panel` message from the FAB; bridges
-  `chrome.scripting.executeScript` to return the active tab's
-  `outerHTML + URL + title`.
-- `extension/src/sidepanel/` — React + Tailwind side panel. On open it asks
-  the background for the active tab's HTML, parses it with DOMParser, runs
-  `extract()` from shared, and renders title/metadata/markdown with Copy
-  and Download buttons.
-- `extension/build.mjs` — orchestrator: esbuild for background (ESM) and
-  content (IIFE), Vite for the side panel, then copies manifest.json.
-- `npm run build:extension` ✅ — outputs `extension/dist/` ready for
-  `chrome://extensions → Load unpacked`.
+- `extension/src/lib/idb.ts` — minimal IndexedDB wrapper (one `handles` store)
+- `extension/src/lib/fs.ts` — `pickClipsDir`, `getClipsDir`, `setClipsDir`,
+  `ensureWritePermission`, `saveClip` (with `-2/-3/...` conflict suffix),
+  `clipFilename`
+- `extension/src/options.html` + `options/Options.tsx` — "Choose clips folder"
+  button (`showDirectoryPicker`), shows current folder name + permission state,
+  Re-grant + Clear buttons
+- `extension/src/sidepanel/App.tsx` — on extract, auto-saves if a folder is set
+  and permission is `granted`; otherwise shows a Save button that requests
+  permission inside the click handler. Status line under the action bar
+  reports "Saved {filename}" / "No clips folder set" / "Permission needed"
+- `extension/manifest.json` — `options_page: "options.html"`
+- `extension/vite.config.ts` — multi-page (sidepanel + options)
+- Repo structure: `sidepanel.html` and `options.html` now live at
+  `extension/src/` (root of Vite's source) with React entries in
+  `sidepanel/` and `options/` subfolders. Shared Tailwind base at
+  `extension/src/index.css`.
 
-**Needs in-browser smoke test before Phase 3:** load unpacked, click FAB on
-3 different blog posts, verify side panel shows clean MD, Copy/Download
-work, FAB position persists per site. (Cannot run from sandbox; Lawrence
-to verify on a real Chrome.)
+**Acceptance (needs real-Chrome verification):** Pick a folder once in
+options → clip 5 articles → all five appear as `.md` files with correct
+frontmatter → re-clipping the same article appends `-2`.
 
-**Next: Phase 3 — File System Access API integration.**
+**Next: Phase 4 — AI actions (Claude.ai handoff + optional API key).**
 
 ## Phases (high-level)
 
 0. Bootstrap ✅
 1. Shared extraction core (generic Readability, markdown, frontmatter, slug, lang, tests) ✅
 2. Chrome extension MVP (FAB, side panel, copy/download) — build ✅, pending in-browser smoke test
-3. File System Access API integration (auto-save to chosen folder)
+3. File System Access API integration (auto-save to chosen folder) — build ✅, pending in-browser smoke test
 4. AI actions (Claude.ai handoff + optional API key)
 5. Per-site adapters (X, Substack, NYT, archive.ph)
 6. Library + search (clip index, search/filter, tag editing)

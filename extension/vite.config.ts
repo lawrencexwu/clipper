@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react";
 import path from "node:path";
 
 export default defineConfig({
-  root: path.resolve(__dirname, "src/sidepanel"),
+  root: path.resolve(__dirname, "src"),
   plugins: [react()],
   resolve: {
     alias: {
@@ -15,7 +15,10 @@ export default defineConfig({
     emptyOutDir: false,
     sourcemap: false,
     rollupOptions: {
-      input: path.resolve(__dirname, "src/sidepanel/sidepanel.html"),
+      input: {
+        sidepanel: path.resolve(__dirname, "src/sidepanel.html"),
+        options: path.resolve(__dirname, "src/options.html"),
+      },
       output: {
         entryFileNames: "assets/[name]-[hash].js",
         chunkFileNames: "assets/[name]-[hash].js",
