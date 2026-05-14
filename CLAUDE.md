@@ -111,7 +111,46 @@ The build orchestrator (`extension/build.mjs`) produces:
 
 ## Current phase
 
-**Phase 8 build-complete.** iOS Shortcut payload + reproducible build doc:
+**Phase 9 build-complete.** Claude Code skill:
+
+- `claude-code-skill/clip.ts` — Node entry. Validates URL → `fetch()` with
+  desktop Safari UA → JSDOM → shared `extract()` → writes to
+  `~/Library/Mobile Documents/com~apple~CloudDocs/Clipper/` (override via
+  `$CLIPPER_DIR`). Filename collisions get `-2/-3/…`. Stdout is one
+  pretty-printed JSON status object; errors go to stderr with non-zero
+  exit.
+- `claude-code-skill/build.mjs` — esbuild → ESM Node bundle at
+  `claude-code-skill/clip.mjs` (~15KB; shared inlined, jsdom +
+  readability + turndown kept external so they load from node_modules
+  at runtime). Adds `#!/usr/bin/env node` shebang and chmod +x.
+- `claude-code-skill/package.json` — declares the three runtime deps;
+  `npm install` after the user copies the folder pulls them in.
+- `claude-code-skill/SKILL.md` — frontmatter with the `name` and
+  `description` Claude Code uses for skill discovery, plus a body
+  describing invocation, JSON output schema, install, and when *not*
+  to use this skill (vs `WebFetch` for read-only analysis).
+- `package.json` (root) — `npm run build:skill` wired in.
+
+**Smoke test ran end-to-end in a sandbox** against a local
+`python3 -m http.server` serving the generic-blog fixture: fetch +
+extract + write all worked; the on-disk markdown matched the extension's
+output. Network egress to real sites is blocked from this Claude Code
+session so the Stratechery acceptance test is left to Lawrence.
+
+**Acceptance (needs Mac verification):**
+
+- Install: `cp -r claude-code-skill ~/.claude/skills/clipper && cd
+  ~/.claude/skills/clipper && npm install`.
+- In a fresh Claude Code session, paste "clip this URL:
+  https://stratechery.com/2025/some-post" → skill fires → file appears
+  in `~/Library/Mobile Documents/com~apple~CloudDocs/Clipper/`.
+
+**Next: Phase 10 — polish (keyboard shortcut, context menu, hide list,
+README, screenshots).**
+
+---
+
+**Phase 8 complete.** iOS Shortcut payload + reproducible build doc:
 
 - `ios-shortcut/src/payload.ts` — runs in the live Safari tab via the
   Shortcuts "Run JavaScript on Web Page" action. Uses the shared
@@ -318,7 +357,7 @@ custom domains both detected).
 6. Library + search (clip index, search/filter, tag editing) — build ✅, pending in-browser smoke test
 7. Bookmarklet (Safari iOS + Mac) — build ✅, pending in-Safari smoke test
 8. iOS Shortcut — payload ✅ + BUILD.md ✅, pending real-iOS verification
-9. Claude Code skill
+9. Claude Code skill — build ✅ (sandbox-smoke-tested), pending Mac verification
 10. Polish (keyboard shortcut, context menu, hide list, README, screenshots)
 
 ## Working style

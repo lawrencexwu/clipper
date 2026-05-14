@@ -11,7 +11,7 @@
     "build:extension": "node extension/build.mjs",
     "build:bookmarklet": "node bookmarklet/build.js",
     "build:shortcut": "node ios-shortcut/build.js",
-    "build:skill": "tsc -p claude-code-skill/tsconfig.json"
+    "build:skill": "node claude-code-skill/build.mjs"
   },
   "dependencies": {
     "@mozilla/readability": "^0.5.0",
