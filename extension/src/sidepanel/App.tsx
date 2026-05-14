@@ -18,6 +18,8 @@ import {
 } from "../lib/settings.js";
 import {
   claudeAiHandoff,
+  estimateCostUsd,
+  formatUsd,
   notebookLmHandoff,
   streamFromAnthropic,
   type StreamUsage,
@@ -520,6 +522,10 @@ function AiPanel({
           {ai.usage.input_tokens} in · {ai.usage.output_tokens} out
           {ai.usage.cache_read_input_tokens > 0 &&
             ` · ${ai.usage.cache_read_input_tokens} cached`}
+          {" · "}
+          <span className="font-medium text-neutral-700">
+            {formatUsd(estimateCostUsd(ai.usage))}
+          </span>
         </p>
       )}
       {ai.kind === "error" && (

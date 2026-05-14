@@ -2,6 +2,32 @@ const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_MODEL = "claude-opus-4-7";
 const ANTHROPIC_MAX_TOKENS = 16000;
 
+// USD per million tokens for claude-opus-4-7. Cached read = 0.1× input;
+// cache write (5-minute TTL) = 1.25× input.
+const PRICE_PER_MTOK = {
+  input: 5,
+  output: 25,
+  cacheWrite: 6.25,
+  cacheRead: 0.5,
+} as const;
+
+export function estimateCostUsd(usage: StreamUsage): number {
+  return (
+    (usage.input_tokens * PRICE_PER_MTOK.input +
+      usage.output_tokens * PRICE_PER_MTOK.output +
+      usage.cache_creation_input_tokens * PRICE_PER_MTOK.cacheWrite +
+      usage.cache_read_input_tokens * PRICE_PER_MTOK.cacheRead) /
+    1_000_000
+  );
+}
+
+export function formatUsd(amount: number): string {
+  if (amount === 0) return "$0";
+  if (amount < 0.001) return "<$0.001";
+  if (amount < 1) return `$${amount.toFixed(4)}`;
+  return `$${amount.toFixed(2)}`;
+}
+
 export interface StreamUsage {
   input_tokens: number;
   output_tokens: number;
