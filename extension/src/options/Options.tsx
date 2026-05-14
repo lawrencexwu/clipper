@@ -7,8 +7,10 @@ import {
 } from "../lib/fs.js";
 import {
   getApiKey,
+  getArchiveFallback,
   getPromptOverride,
   setApiKey,
+  setArchiveFallback,
   setPromptOverride,
 } from "../lib/settings.js";
 import { DEFAULTS, PROMPT_LABELS, type PromptKey } from "@shared/prompts.js";
@@ -27,6 +29,7 @@ export function Options() {
       <h1 className="text-2xl font-semibold">Clipper options</h1>
       <FolderSection />
       <ApiKeySection />
+      <ArchiveSection />
       <PromptsSection />
       <NotesSection />
     </div>
@@ -191,6 +194,39 @@ function ApiKeySection() {
         )}
         {saved && <span className="text-xs text-green-700">saved</span>}
       </div>
+    </section>
+  );
+}
+
+function ArchiveSection() {
+  const [enabled, setEnabled] = useState(false);
+
+  useEffect(() => {
+    void getArchiveFallback().then(setEnabled);
+  }, []);
+
+  async function toggle(next: boolean) {
+    setEnabled(next);
+    await setArchiveFallback(next);
+  }
+
+  return (
+    <section>
+      <h2 className="text-base font-medium">archive.ph fallback</h2>
+      <p className="mt-1 text-sm text-neutral-600">
+        If a clip extracts fewer than 200 words (likely a server-side paywall),
+        show a button to open the page via <code>archive.ph/newest/</code> in a
+        new tab. Off by default.
+      </p>
+      <label className="mt-3 inline-flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(e) => void toggle(e.target.checked)}
+          className="h-4 w-4"
+        />
+        Offer archive.ph fallback when extraction is sparse
+      </label>
     </section>
   );
 }

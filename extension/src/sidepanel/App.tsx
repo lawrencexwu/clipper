@@ -7,7 +7,8 @@ import {
   getClipsDir,
   saveClip,
 } from "../lib/fs.js";
-import { getApiKey, resolvePrompt } from "../lib/settings.js";
+import { getApiKey, getArchiveFallback, resolvePrompt } from "../lib/settings.js";
+import { archivePhUrl, shouldOfferArchive } from "@shared/archive.js";
 import {
   claudeAiHandoff,
   notebookLmHandoff,
@@ -49,7 +50,12 @@ export function App() {
   const [save, setSave] = useState<SaveState>({ kind: "idle" });
   const [ai, setAi] = useState<AiState>({ kind: "idle" });
   const [toast, setToast] = useState<string | null>(null);
+  const [archiveOn, setArchiveOn] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    void getArchiveFallback().then(setArchiveOn);
+  }, []);
 
   useEffect(() => {
     void runClip();
@@ -271,7 +277,10 @@ export function App() {
           </div>
         )}
         {status.kind === "ok" && ai.kind === "idle" && (
-          <Preview result={status.result} />
+          <Preview
+            result={status.result}
+            archiveOn={archiveOn}
+          />
         )}
         {status.kind === "ok" && ai.kind !== "idle" && (
           <AiPanel
@@ -459,8 +468,15 @@ function AiPanel({
   );
 }
 
-function Preview({ result }: { result: ExtractResult }) {
+function Preview({
+  result,
+  archiveOn,
+}: {
+  result: ExtractResult;
+  archiveOn: boolean;
+}) {
   const fm = result.frontmatter;
+  const sparse = shouldOfferArchive(fm.word_count);
   return (
     <div className="space-y-3">
       <div className="rounded border border-neutral-200 bg-neutral-50 p-2 text-xs text-neutral-700">
@@ -474,6 +490,21 @@ function Preview({ result }: { result: ExtractResult }) {
           <span>via {fm.adapter}</span>
         </div>
       </div>
+      {sparse && archiveOn && (
+        <div className="flex items-center justify-between rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900">
+          <span>
+            Only {fm.word_count} words extracted — try archive.ph?
+          </span>
+          <a
+            href={archivePhUrl(fm.url)}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded border border-amber-400 bg-white px-2 py-0.5 text-amber-900 hover:bg-amber-100"
+          >
+            Open archive.ph
+          </a>
+        </div>
+      )}
       <pre className="whitespace-pre-wrap break-words rounded border border-neutral-200 bg-white p-2 font-mono text-[11px] leading-snug">
         {result.markdown}
       </pre>

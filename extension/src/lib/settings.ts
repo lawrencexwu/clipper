@@ -3,6 +3,7 @@ import { DEFAULTS } from "@shared/prompts.js";
 
 const API_KEY_KEY = "ai.apiKey";
 const PROMPT_OVERRIDE_PREFIX = "ai.prompt.";
+const ARCHIVE_FALLBACK_KEY = "archiveFallback";
 
 export async function getApiKey(): Promise<string | undefined> {
   const r = await chrome.storage.local.get(API_KEY_KEY);
@@ -16,6 +17,15 @@ export async function setApiKey(key: string): Promise<void> {
   } else {
     await chrome.storage.local.remove(API_KEY_KEY);
   }
+}
+
+export async function getArchiveFallback(): Promise<boolean> {
+  const r = await chrome.storage.local.get(ARCHIVE_FALLBACK_KEY);
+  return r[ARCHIVE_FALLBACK_KEY] === true;
+}
+
+export async function setArchiveFallback(enabled: boolean): Promise<void> {
+  await chrome.storage.local.set({ [ARCHIVE_FALLBACK_KEY]: enabled });
 }
 
 export async function getPromptOverride(

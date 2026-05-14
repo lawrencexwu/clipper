@@ -111,7 +111,52 @@ The build orchestrator (`extension/build.mjs`) produces:
 
 ## Current phase
 
-**Phase 4 build-complete.** AI actions wired:
+**Phase 5 build-complete.** Per-site adapters + archive.ph fallback:
+
+- `shared/adapters/x.ts` — `x.com` / `twitter.com`. Walks
+  `article[data-testid="tweet"]` chains filtered to the URL's handle.
+  Output: numbered paragraphs (skips prepending a number when the tweet
+  already starts with `N/`), images preserved as `<img>` (avatars/profile
+  pics filtered), quote tweets as `<blockquote>@author: text</blockquote>`.
+- `shared/adapters/substack.ts` — `*.substack.com` and any site that
+  declares `<meta name="generator" content="Substack">`. Extracts from
+  `.body.markup`, prepends `<h2>` subtitle if `.subtitle` is present,
+  rewrites `.footnote-anchor` refs to `[^N]` with definitions appended
+  (pass-through when no footnote markup).
+- `shared/adapters/nyt.ts` — `nytimes.com`. Clones the doc, strips
+  `[data-testid*=paywall]` / `[id*=gateway]` / `[class*=paywall|gateway]`
+  before extracting `section[name="articleBody"]`. Byline from
+  `meta[name="byl"]` (NYT-specific) or `[data-testid="byline"]`, stripping
+  the leading "By".
+- `shared/archive.ts` — `archivePhUrl()` rewrites to
+  `https://archive.ph/newest/{url}`; `shouldOfferArchive(n)` thresholds at
+  200 words.
+- `shared/adapters/index.ts` — dispatcher registers x → substack → nyt,
+  falls back to generic.
+- `extension/src/sidepanel/App.tsx` — when extraction is sparse
+  (<200 words) AND the archive fallback setting is on, shows a yellow
+  banner with an "Open archive.ph" link.
+- `extension/src/options/Options.tsx` — new "archive.ph fallback" section
+  with a checkbox (off by default).
+
+**Test coverage:** 11 new adapter tests, 41 total. Each adapter validated
+end-to-end via `extract()` + against its fixture. URL matchers checked
+for hostname edge cases (`nytimes.example.com` rejected, `www.x.com` and
+`twitter.com` accepted, `bob.substack.com` and meta-generator-detected
+custom domains both detected).
+
+**Acceptance (needs real-Chrome verification on 5+ live pages each):**
+
+- X: open a thread by the original author. Side panel should show
+  numbered paragraphs, no replies from other users mixed in.
+- Substack: open a free post on a `.substack.com` domain and a
+  custom-domain Substack site. Both should show the substack adapter
+  badge in the preview header.
+- NYT: open a paywalled article. CSS-overlay paywalls should be stripped;
+  server-gated content (truncated HTML) will return a short clip — toggle
+  archive.ph fallback in options to get the "Open archive.ph" button.
+
+**Next: Phase 6 — library + search.**
 
 - `shared/prompts.ts` — 5 default action prompts (`summarize`, `explain`,
   `steelman`, `extract`, `falsify`) as named exports + `DEFAULTS` map +
@@ -157,7 +202,7 @@ The build orchestrator (`extension/build.mjs`) produces:
 2. Chrome extension MVP (FAB, side panel, copy/download) — build ✅, pending in-browser smoke test
 3. File System Access API integration (auto-save to chosen folder) — build ✅, pending in-browser smoke test
 4. AI actions (Claude.ai handoff + optional API key) — build ✅, pending in-browser smoke test
-5. Per-site adapters (X, Substack, NYT, archive.ph)
+5. Per-site adapters (X, Substack, NYT, archive.ph) — build ✅, pending in-browser smoke test
 6. Library + search (clip index, search/filter, tag editing)
 7. Bookmarklet (Safari iOS + Mac)
 8. iOS Shortcut
@@ -176,13 +221,19 @@ The build orchestrator (`extension/build.mjs`) produces:
 
 ## Gotchas / known issues
 
-- **NYT byline not extracted by generic adapter.** The fixture uses
-  `meta[name="byl"]` (NYT-specific) instead of `meta[name="author"]`. Generic
-  Readability also misses it. Will be fixed by the NYT-specific adapter in
-  Phase 5.
-- **X/Twitter not usable via generic Readability.** The thread DOM has no
-  prose container Readability recognises. Pipeline runs without crashing but
-  output is empty / minimal. Per-site adapter is the fix (Phase 5).
 - **Fixtures are synthetic.** They mimic real DOM structures but were authored
   for this repo, not scraped. After each adapter lands, re-test on 5+ live
   pages and capture failures.
+- **Substack footnote conversion is best-effort.** Refs become `[^N]` and
+  definitions are appended only when a `.footnote` / `.footnote-body`
+  container is present in the body. Real Substack often renders footnote
+  bodies in a separate wrapper outside `.body.markup` — when that happens we
+  emit `[^N]` refs without definitions. Verify on a footnote-heavy post and
+  refine the selector list as needed.
+- **X quote tweets via nested `<article>`.** The adapter scans
+  `article :scope article` for quotes, which works on the simple thread view.
+  Real X often wraps quotes in non-`article` containers; if a thread with
+  quotes loses them, capture the live DOM and add a selector.
+- **NYT server-gated content.** The adapter only handles the CSS-hidden
+  overlay case. Articles whose body is truncated server-side will produce a
+  short clip — enable `archive.ph` fallback in options.
