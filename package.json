@@ -8,7 +8,7 @@
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "build:extension": "vite build --config extension/vite.config.ts",
+    "build:extension": "node extension/build.mjs",
     "build:bookmarklet": "node bookmarklet/build.js",
     "build:skill": "tsc -p claude-code-skill/tsconfig.json"
   },

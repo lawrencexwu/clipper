@@ -102,33 +102,47 @@ npm run build:bookmarklet
 2. Chrome → `chrome://extensions` → enable "Developer mode"
 3. "Load unpacked" → select `extension/dist/`
 
-(Build target not yet wired — added in Phase 2.)
+The build orchestrator (`extension/build.mjs`) produces:
+
+- `background.js` (ESM service worker, esbuild)
+- `content.js` (IIFE content script, esbuild)
+- `sidepanel.html` + `assets/` (Vite + React + Tailwind)
+- `manifest.json` (copied verbatim)
 
 ## Current phase
 
-**Phase 1 complete.** Shared extraction core implemented:
+**Phase 2 build-complete.** Chrome MV3 extension assembled:
 
-- `shared/extractor.ts` — entry point, returns `{frontmatter, body, markdown}`
-- `shared/adapters/generic.ts` — Readability-based fallback
-- `shared/adapters/index.ts` — dispatcher (only `generic` registered until Phase 5)
-- `shared/markdown.ts` — Turndown with ATX headers, fenced code, inline links,
-  image alt preserved, empty `<p>` stripped (only when truly empty — not when
-  containing an `<img>`)
-- `shared/frontmatter.ts` — YAML emit, `bareDomain`, `nowIso` with local offset
-- `shared/slug.ts` — slugify keeping CJK; falls back to `untitled`
-- `shared/lang.ts` — heuristic CJK detection (en / zh / ja / other)
-- Fixtures: `generic-blog.html`, `substack-free.html`, `x-thread.html`,
-  `nyt-article.html` (synthetic but realistic)
-- 30 passing Vitest tests covering all of the above
-- `npm test` ✅, `npm run typecheck` ✅
+- `extension/manifest.json` — MV3 with `sidePanel`, `activeTab`, `scripting`,
+  `storage`, content script on `<all_urls>`, ESM background worker
+- `extension/src/content/content.ts` — draggable FAB, position persisted
+  per-host via `chrome.storage.local["fab-pos:<host>"]`. Self-contained
+  (no imports) so it bundles to a clean IIFE.
+- `extension/src/background.ts` — `sidePanel.open` on icon click and on
+  `open-side-panel` message from the FAB; bridges
+  `chrome.scripting.executeScript` to return the active tab's
+  `outerHTML + URL + title`.
+- `extension/src/sidepanel/` — React + Tailwind side panel. On open it asks
+  the background for the active tab's HTML, parses it with DOMParser, runs
+  `extract()` from shared, and renders title/metadata/markdown with Copy
+  and Download buttons.
+- `extension/build.mjs` — orchestrator: esbuild for background (ESM) and
+  content (IIFE), Vite for the side panel, then copies manifest.json.
+- `npm run build:extension` ✅ — outputs `extension/dist/` ready for
+  `chrome://extensions → Load unpacked`.
 
-**Next: Phase 2 — Chrome extension MVP.**
+**Needs in-browser smoke test before Phase 3:** load unpacked, click FAB on
+3 different blog posts, verify side panel shows clean MD, Copy/Download
+work, FAB position persists per site. (Cannot run from sandbox; Lawrence
+to verify on a real Chrome.)
+
+**Next: Phase 3 — File System Access API integration.**
 
 ## Phases (high-level)
 
 0. Bootstrap ✅
 1. Shared extraction core (generic Readability, markdown, frontmatter, slug, lang, tests) ✅
-2. Chrome extension MVP (FAB, side panel, copy/download)
+2. Chrome extension MVP (FAB, side panel, copy/download) — build ✅, pending in-browser smoke test
 3. File System Access API integration (auto-save to chosen folder)
 4. AI actions (Claude.ai handoff + optional API key)
 5. Per-site adapters (X, Substack, NYT, archive.ph)
