@@ -111,7 +111,40 @@ The build orchestrator (`extension/build.mjs`) produces:
 
 ## Current phase
 
-**Phase 7 build-complete.** Safari bookmarklet:
+**Phase 8 build-complete.** iOS Shortcut payload + reproducible build doc:
+
+- `ios-shortcut/src/payload.ts` — runs in the live Safari tab via the
+  Shortcuts "Run JavaScript on Web Page" action. Uses the shared
+  `extract()` + `slugify()`, then calls Apple's `completion()` callback
+  with a JSON string `{ filename, markdown }` (or `{ error }`).
+- `ios-shortcut/build.js` — esbuild → self-contained IIFE,
+  `ios-shortcut/dist/payload.js` (~57 KB minified, `keepNames: true` so
+  the free `completion` reference isn't renamed).
+- `ios-shortcut/BUILD.md` — durable step-by-step to build the Shortcut
+  from scratch in the iPhone Shortcuts app (share-sheet trigger →
+  Run JS on Web Page → Get Dictionary → 2× Get Dictionary Value →
+  Save File to `iCloud Drive/Clipper/` with custom filename). Includes
+  troubleshooting + how to export the binary `.shortcut` as a backup.
+- `package.json` — `npm run build:shortcut` wired in.
+
+**Deviation from spec, documented in BUILD.md:** The plan called for
+"Get Current URL from Safari → Get Contents of URL → Run JavaScript on
+Web Page". That chain doesn't actually compose — "Run JavaScript on Web
+Page" requires a live Safari tab, not a fetched HTML string. The
+share-sheet trigger flow (which gets the live tab as input directly) is
+the standard, less-fragile pattern.
+
+**Acceptance (needs real iOS verification):**
+
+- Share sheet on an article in Safari → tap Clipper → no error.
+- File appears in `iCloud Drive/Clipper/` named
+  `YYYY-MM-DD-{slug}-{source}.md` with valid frontmatter.
+
+**Next: Phase 9 — Claude Code skill.**
+
+---
+
+**Phase 7 complete.** Safari bookmarklet:
 
 - `bookmarklet/src/loader.ts` — the `javascript:` payload. Calls
   `window.open()` synchronously to preserve the user gesture (iOS Safari
@@ -284,7 +317,7 @@ custom domains both detected).
 5. Per-site adapters (X, Substack, NYT, archive.ph) — build ✅, pending in-browser smoke test
 6. Library + search (clip index, search/filter, tag editing) — build ✅, pending in-browser smoke test
 7. Bookmarklet (Safari iOS + Mac) — build ✅, pending in-Safari smoke test
-8. iOS Shortcut
+8. iOS Shortcut — payload ✅ + BUILD.md ✅, pending real-iOS verification
 9. Claude Code skill
 10. Polish (keyboard shortcut, context menu, hide list, README, screenshots)
 
