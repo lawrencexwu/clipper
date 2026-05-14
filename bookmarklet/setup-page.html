@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Install Clipper Bookmarklet</title>
+  <style>
+    body { font: 15px/1.55 -apple-system, BlinkMacSystemFont, sans-serif; max-width: 720px; margin: 24px auto; padding: 0 16px; color: #111; }
+    h1 { font-size: 22px; }
+    h2 { font-size: 17px; margin-top: 28px; }
+    .install {
+      display: inline-block;
+      padding: 10px 16px;
+      margin: 8px 0 16px;
+      background: #111;
+      color: #fff;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+    }
+    code, textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+    textarea { width: 100%; height: 120px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; }
+    .muted { color: #666; font-size: 12px; }
+    ol li { margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Clipper bookmarklet</h1>
+  <p>Drag this button to your bookmarks bar:</p>
+  <p><a class="install" href="__BOOKMARKLET_URL__">📎 Clipper</a></p>
+  <p>Click it on any article page. A new tab opens with the clipped markdown plus buttons to Copy, Save to Files (iCloud Drive on iPhone), or Open in Claude.ai.</p>
+
+  <h2>iPhone Safari setup</h2>
+  <p>Safari iOS does not let you drag bookmarklets, so you set it up manually:</p>
+  <ol>
+    <li>Bookmark <em>any</em> page in Safari (Share → Add Bookmark)</li>
+    <li>Open Bookmarks, tap Edit, tap the new bookmark</li>
+    <li>Rename it "Clipper" and replace the URL with the code below (copy with the button)</li>
+    <li>Save</li>
+  </ol>
+  <textarea readonly id="code">__BOOKMARKLET_URL__</textarea>
+  <p><button onclick="navigator.clipboard.writeText(document.getElementById('code').value).then(()=>{this.textContent='Copied'})">Copy URL</button></p>
+
+  <h2>Mac Safari setup</h2>
+  <p>Drag the button above to the Favorites bar. If the bar is hidden: View → Show Favorites Bar.</p>
+
+  <h2>How it works</h2>
+  <p>The bookmarklet runs the same extraction core as the Chrome extension and Claude Code skill — Mozilla Readability with per-site adapters for X / Substack / NYT, then Turndown for clean Markdown. Output includes a YAML frontmatter block compatible with Obsidian.</p>
+  <p class="muted">Bookmarklet length: __BOOKMARKLET_LENGTH__ characters</p>
+</body>
+</html>

@@ -111,7 +111,50 @@ The build orchestrator (`extension/build.mjs`) produces:
 
 ## Current phase
 
-**Phase 6 build-complete.** Library + search:
+**Phase 7 build-complete.** Safari bookmarklet:
+
+- `bookmarklet/src/loader.ts` — the `javascript:` payload. Calls
+  `window.open()` synchronously to preserve the user gesture (iOS Safari
+  rule), then injects `<script src=…/main.js>` into the host page and
+  hands the script the opened-window reference + a UUID via a global
+  `window.__clipper.run(target, uuid)` hook.
+- `bookmarklet/src/main.ts` — runs in the host-page context. Uses the
+  shared `extract()` pipeline, then `postMessage`s the markdown +
+  frontmatter + filename to the result tab. Retries every 250ms (up to
+  ~5s) until acked or the target tab closes.
+- `bookmarklet/result-page.html` + `bookmarklet/src/result.ts` — the
+  result tab. Listens for the `clipper-payload` message, caches in
+  `sessionStorage` keyed by the URL's UUID hash (so a refresh restores
+  the view), shows title / metadata / raw markdown, with Copy / Save
+  to Files / Open in Claude.ai buttons. The Save button triggers a
+  blob download — on iOS Safari that opens the share sheet which
+  includes "Save to Files" → iCloud Drive.
+- `bookmarklet/setup-page.html` — the install page. Drag the link to
+  the bookmarks bar on Mac; manual URL-paste instructions for iPhone.
+- `bookmarklet/build.js` — esbuild-based orchestrator. Three IIFE
+  bundles: `main.js` (with shared core), `result.js`, and the
+  loader (minified, URL-encoded, wrapped as `javascript:`). The
+  loader's host URL is injected at build time via `__HOST__` (override
+  with `CLIPPER_BOOKMARKLET_HOST`).
+
+Default hosting URL is `https://lawrencexwu.github.io/clipper/`. To
+publish: copy `bookmarklet/dist/` to that GitHub Pages site.
+Bookmarklet URL is **879 chars**, well under any browser limit.
+
+**Acceptance (needs real-Safari verification):**
+
+- Mac Safari: drag the link from `setup.html` to favorites bar. Visit
+  an article. Click bookmark. New tab opens with the clipped markdown.
+  Copy / Save / Claude.ai handoff all work.
+- iPhone Safari: install via the manual paste instructions. Tap the
+  bookmark on an article. New tab. Save → share sheet → Save to Files
+  → iCloud Drive lands the `.md`.
+
+**Next: Phase 8 — iOS Shortcut.**
+
+---
+
+**Phase 6 complete.** Library + search:
 
 - `shared/frontmatter.ts` — new `parseFrontmatter(markdown)` round-trips
   every field `buildFrontmatter` emits (5 new tests). Unwraps quoted
@@ -240,7 +283,7 @@ custom domains both detected).
 4. AI actions (Claude.ai handoff + optional API key) — build ✅, pending in-browser smoke test
 5. Per-site adapters (X, Substack, NYT, archive.ph) — build ✅, pending in-browser smoke test
 6. Library + search (clip index, search/filter, tag editing) — build ✅, pending in-browser smoke test
-7. Bookmarklet (Safari iOS + Mac)
+7. Bookmarklet (Safari iOS + Mac) — build ✅, pending in-Safari smoke test
 8. iOS Shortcut
 9. Claude Code skill
 10. Polish (keyboard shortcut, context menu, hide list, README, screenshots)
