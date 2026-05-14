@@ -79,7 +79,7 @@ source: substack.com         # bare domain
 author: "Author name"        # "" if not extractable
 published: 2026-05-14        # "" if not extractable
 clipped: 2026-05-14T08:30:00+08:00
-lang: en                     # en | zh | ja | other
+lang: en                     # en | zh-Hant | zh-Hans | zh | ja | other
 adapter: substack            # which adapter handled it
 word_count: 1247
 tags: []
@@ -111,7 +111,68 @@ The build orchestrator (`extension/build.mjs`) produces:
 
 ## Current phase
 
-**Phase 9 build-complete.** Claude Code skill:
+**v1 daily-driver ready.** All ten phases built; pending only in-browser /
+real-device smoke tests by Lawrence. Final commit closes Phase 10.
+
+**Phase 10 complete.** Polish:
+
+- Keyboard shortcut: Cmd+Shift+K (mac) / Ctrl+Shift+K (windows) opens the
+  side panel on the active tab. Wired via the manifest `commands` section
+  and `chrome.commands.onCommand` in `background.ts`.
+- Right-click context menu: "Clip with Clipper" on `page`, `selection`,
+  `link`, and `image` contexts. Same handler as the keyboard shortcut.
+- Per-site FAB hide list: `fabHideHosts: string[]` in
+  `chrome.storage.local`. Content script reads it before mounting the
+  FAB. Options page has a chip-style editor with an add input. Keyboard
+  shortcut and context menu still work on hidden sites.
+- Lang detection: `zh` is now refined to `zh-Hant` / `zh-Hans` via a
+  distinctive-character heuristic in `shared/lang.ts`. Falls back to
+  `zh` only when no distinctive chars are found. The frontmatter `lang`
+  field's union expands accordingly; existing `"zh"` clips remain valid.
+- Top-level `README.md` rewritten as the install + usage guide for all
+  four surfaces.
+
+**Tests:** 47 passing (was 46 — added Simplified Chinese test).
+**Builds:** all four (`extension`, `bookmarklet`, `shortcut`, `skill`) ✅.
+
+## v1 status by phase
+
+| Phase | What | Status |
+|---|---|---|
+| 0 | Bootstrap | ✅ committed |
+| 1 | Shared extraction core | ✅ tested |
+| 2 | Chrome extension MVP (FAB, side panel, copy/download) | ✅ built, needs in-browser smoke test |
+| 3 | File System Access API integration | ✅ built, needs in-browser smoke test |
+| 4 | AI actions (Claude.ai handoff + optional API key) | ✅ built, needs in-browser smoke test |
+| 5 | Per-site adapters (X, Substack, NYT, archive.ph) | ✅ tested, needs live-site spot-check |
+| 6 | Library + search | ✅ built, needs in-browser smoke test |
+| 7 | Bookmarklet (Safari iOS + Mac) | ✅ built, needs in-Safari smoke test |
+| 8 | iOS Shortcut | ✅ payload + BUILD.md, needs real-iOS rebuild |
+| 9 | Claude Code skill | ✅ sandbox-smoke-tested, needs Mac verification |
+| 10 | Polish | ✅ shipped |
+
+## Known issues / things to fix next
+
+- **Fixtures are synthetic.** Per-site adapter behavior on real X /
+  Substack / NYT pages is unverified end-to-end. Capture failures as
+  you find them and refine the selectors.
+- **Substack footnote definitions** are best-effort — refs always become
+  `[^N]`, but definitions only emit when the `.footnote` container sits
+  inside `.body.markup`. Many real posts wrap definitions in a sibling
+  element.
+- **X quote tweets via nested `<article>`** — works on the simple thread
+  view. Real X often wraps quotes in non-`article` containers; capture
+  the live DOM and add a selector when this breaks.
+- **NYT server-gated content** can't be helped from inside the page —
+  toggle archive.ph in options.
+- **iOS Shortcut updates require manual paste.** Each `payload.js`
+  change needs to be re-pasted into the Shortcuts action; there's no
+  in-place update.
+- **No icon.** Chrome shows the puzzle-piece. Cosmetic only.
+
+---
+
+**Phase 9 complete.** Claude Code skill:
 
 - `claude-code-skill/clip.ts` — Node entry. Validates URL → `fetch()` with
   desktop Safari UA → JSDOM → shared `extract()` → writes to
@@ -358,7 +419,7 @@ custom domains both detected).
 7. Bookmarklet (Safari iOS + Mac) — build ✅, pending in-Safari smoke test
 8. iOS Shortcut — payload ✅ + BUILD.md ✅, pending real-iOS verification
 9. Claude Code skill — build ✅ (sandbox-smoke-tested), pending Mac verification
-10. Polish (keyboard shortcut, context menu, hide list, README, screenshots)
+10. Polish (keyboard shortcut, context menu, hide list, README) — ✅ shipped
 
 ## Working style
 

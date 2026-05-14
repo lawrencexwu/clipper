@@ -11,6 +11,14 @@
   const DEFAULT_RIGHT = 16;
   const DEFAULT_BOTTOM = 16;
 
+  chrome.storage.local.get("fabHideHosts", (r) => {
+    const hide = r.fabHideHosts;
+    if (Array.isArray(hide) && hide.includes(host)) return;
+    mount();
+  });
+
+  function mount() {
+
   const fab = document.createElement("button");
   fab.id = "clipper-fab";
   fab.type = "button";
@@ -95,5 +103,6 @@
     chrome.runtime.sendMessage({ type: "open-side-panel" });
   });
 
-  document.documentElement.appendChild(fab);
+    document.documentElement.appendChild(fab);
+  }
 })();

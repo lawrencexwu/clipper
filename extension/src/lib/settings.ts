@@ -4,6 +4,17 @@ import { DEFAULTS } from "@shared/prompts.js";
 const API_KEY_KEY = "ai.apiKey";
 const PROMPT_OVERRIDE_PREFIX = "ai.prompt.";
 const ARCHIVE_FALLBACK_KEY = "archiveFallback";
+const FAB_HIDE_HOSTS_KEY = "fabHideHosts";
+
+export async function getFabHideHosts(): Promise<string[]> {
+  const r = await chrome.storage.local.get(FAB_HIDE_HOSTS_KEY);
+  const v = r[FAB_HIDE_HOSTS_KEY];
+  return Array.isArray(v) ? (v as string[]) : [];
+}
+
+export async function setFabHideHosts(hosts: string[]): Promise<void> {
+  await chrome.storage.local.set({ [FAB_HIDE_HOSTS_KEY]: hosts });
+}
 
 export async function getApiKey(): Promise<string | undefined> {
   const r = await chrome.storage.local.get(API_KEY_KEY);

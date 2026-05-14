@@ -8,9 +8,11 @@ import {
 import {
   getApiKey,
   getArchiveFallback,
+  getFabHideHosts,
   getPromptOverride,
   setApiKey,
   setArchiveFallback,
+  setFabHideHosts,
   setPromptOverride,
 } from "../lib/settings.js";
 import { DEFAULTS, PROMPT_LABELS, type PromptKey } from "@shared/prompts.js";
@@ -30,6 +32,7 @@ export function Options() {
       <FolderSection />
       <ApiKeySection />
       <ArchiveSection />
+      <FabHideSection />
       <PromptsSection />
       <NotesSection />
     </div>
@@ -227,6 +230,79 @@ function ArchiveSection() {
         />
         Offer archive.ph fallback when extraction is sparse
       </label>
+    </section>
+  );
+}
+
+function FabHideSection() {
+  const [hosts, setHosts] = useState<string[]>([]);
+  const [draft, setDraft] = useState("");
+
+  useEffect(() => {
+    void getFabHideHosts().then(setHosts);
+  }, []);
+
+  async function add() {
+    const h = draft.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+    if (!h || hosts.includes(h)) {
+      setDraft("");
+      return;
+    }
+    const next = [...hosts, h].sort();
+    setHosts(next);
+    await setFabHideHosts(next);
+    setDraft("");
+  }
+
+  async function remove(h: string) {
+    const next = hosts.filter((x) => x !== h);
+    setHosts(next);
+    await setFabHideHosts(next);
+  }
+
+  return (
+    <section>
+      <h2 className="text-base font-medium">Hide FAB on these sites</h2>
+      <p className="mt-1 text-sm text-neutral-600">
+        Hosts where the floating button should not appear. Use the bare
+        domain (e.g. <code>mail.google.com</code>). The keyboard shortcut
+        and context menu still work on hidden sites; refresh after editing.
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {hosts.map((h) => (
+          <span
+            key={h}
+            className="inline-flex items-center gap-1 rounded-full border border-neutral-300 bg-neutral-50 px-2 py-0.5 text-xs"
+          >
+            <code>{h}</code>
+            <button
+              onClick={() => remove(h)}
+              className="text-neutral-500 hover:text-red-700"
+              aria-label={`Remove ${h}`}
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === ",") {
+              e.preventDefault();
+              void add();
+            }
+          }}
+          placeholder="hostname.example"
+          className="w-48 rounded border border-neutral-300 px-2 py-0.5 font-mono text-xs"
+        />
+        <button
+          onClick={() => void add()}
+          className="rounded border border-neutral-300 px-2 py-0.5 text-xs hover:bg-neutral-100"
+        >
+          Add
+        </button>
+      </div>
     </section>
   );
 }

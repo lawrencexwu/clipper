@@ -6,6 +6,38 @@ chrome.sidePanel
   .setPanelBehavior({ openPanelOnActionClick: true })
   .catch((err) => console.error("Clipper:", err));
 
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.contextMenus.create({
+    id: "clip-page",
+    title: "Clip with Clipper",
+    contexts: ["page", "selection", "link", "image"],
+  });
+});
+
+chrome.commands.onCommand.addListener(async (command) => {
+  if (command === "clip-current-tab") await openOnActiveTab();
+});
+
+chrome.contextMenus.onClicked.addListener(async (_info, tab) => {
+  if (tab?.id !== undefined && tab.windowId !== undefined) {
+    await chrome.sidePanel
+      .open({ tabId: tab.id, windowId: tab.windowId })
+      .catch((err) => console.error("Clipper:", err));
+  }
+});
+
+async function openOnActiveTab(): Promise<void> {
+  const [tab] = await chrome.tabs.query({
+    active: true,
+    lastFocusedWindow: true,
+  });
+  if (tab?.id !== undefined && tab.windowId !== undefined) {
+    await chrome.sidePanel
+      .open({ tabId: tab.id, windowId: tab.windowId })
+      .catch((err) => console.error("Clipper:", err));
+  }
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type === "open-side-panel") {
     const tabId = sender.tab?.id;

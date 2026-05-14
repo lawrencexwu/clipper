@@ -335,6 +335,22 @@ function nowIso(date = /* @__PURE__ */ new Date()) {
 }
 
 // shared/lang.ts
+var TRAD_CHARS = new Set(
+  "\u9AD4\u570B\u5B78\u5BEB\u5C0D\u958B\u70BA\u5F9E\u904E\u4F86\u500B\u8AAA\u767C\u9EDE\u6642\u9019\u9084\u6703\u6A23\u95DC\u9580\u984C\u7DB2\u969B\u8B93\u5834\u982D\u5BE6\u7576\u9802\u98DB\u6578\u9577\u611B\u756B\u6771\u8ECA\u8072\u5EE3\u696D\u52D9\u89BA\u6C23\u7D19\u5E63\u986F\u7D93\u6B77\u89C0\u50F9\u8CB7\u8CE3\u8ECA\u8F1B\u9EBC\u7576\u7576\u52D5\u767C\u8655\u7A2E\u8B80\u6578\u805E\u8F15\u820A\u904B\u52D5\u5716\u66F8\u807D\u898B\u89BA\u8FA6\u54E1\u5BE6\u5BE6\u969B\u969B\u6B50\u8C50\u8C50"
+);
+var SIMP_CHARS = new Set(
+  "\u4F53\u56FD\u5B66\u5199\u5BF9\u5F00\u4E3A\u4ECE\u8FC7\u6765\u4E2A\u8BF4\u53D1\u70B9\u65F6\u8FD9\u8FD8\u4F1A\u6837\u5173\u95E8\u9898\u7F51\u9645\u8BA9\u573A\u5934\u5B9E\u5F53\u9876\u98DE\u6570\u957F\u7231\u753B\u4E1C\u8F66\u58F0\u5E7F\u4E1A\u52A1\u89C9\u6C14\u7EB8\u5E01\u663E\u7ECF\u5386\u89C2\u4EF7\u4E70\u5356\u8F66\u8F86\u4E48\u5F53\u5F53\u52A8\u53D1\u5904\u79CD\u8BFB\u6570\u95FB\u8F7B\u65E7\u8FD0\u52A8\u56FE\u4E66\u542C\u89C1\u89C9\u529E\u5458\u5B9E\u5B9E\u9645\u9645\u6B27\u4E30\u4E30"
+);
+function detectChineseVariant(text) {
+  let trad = 0;
+  let simp = 0;
+  for (const ch of text) {
+    if (TRAD_CHARS.has(ch)) trad++;
+    else if (SIMP_CHARS.has(ch)) simp++;
+  }
+  if (trad === 0 && simp === 0) return "zh";
+  return trad >= simp ? "zh-Hant" : "zh-Hans";
+}
 function detectLang(text) {
   if (!text) return "other";
   const sample = text.slice(0, 4e3);
@@ -352,7 +368,7 @@ function detectLang(text) {
     }
   }
   if (kana >= 5 || kana > 0 && kana * 4 >= han) return "ja";
-  if (han >= 20 && han > latin / 2) return "zh";
+  if (han >= 20 && han > latin / 2) return detectChineseVariant(sample);
   if (latin >= 20) return "en";
   return "other";
 }
