@@ -1,11 +1,19 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { extract, type ExtractResult } from "@shared/extractor.js";
+import { PROMPT_LABELS, type PromptKey } from "@shared/prompts.js";
 import {
   clipFilename,
   ensureWritePermission,
   getClipsDir,
   saveClip,
 } from "../lib/fs.js";
+import { getApiKey, resolvePrompt } from "../lib/settings.js";
+import {
+  claudeAiHandoff,
+  notebookLmHandoff,
+  streamFromAnthropic,
+  type StreamUsage,
+} from "../lib/ai.js";
 
 type Status =
   | { kind: "idle" }
@@ -21,13 +29,31 @@ type SaveState =
   | { kind: "saved"; filename: string }
   | { kind: "error"; message: string };
 
+type AiState =
+  | { kind: "idle" }
+  | { kind: "handoff"; label: string }
+  | { kind: "streaming"; label: string; text: string }
+  | { kind: "done"; label: string; text: string; usage: StreamUsage }
+  | { kind: "error"; label: string; message: string };
+
+const ACTION_KEYS: PromptKey[] = [
+  "summarize",
+  "explain",
+  "steelman",
+  "extract",
+  "falsify",
+];
+
 export function App() {
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [save, setSave] = useState<SaveState>({ kind: "idle" });
+  const [ai, setAi] = useState<AiState>({ kind: "idle" });
   const [toast, setToast] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     void runClip();
+    return () => abortRef.current?.abort();
   }, []);
 
   useEffect(() => {
@@ -39,6 +65,7 @@ export function App() {
   async function runClip() {
     setStatus({ kind: "loading" });
     setSave({ kind: "idle" });
+    setAi({ kind: "idle" });
     try {
       const resp = await chrome.runtime.sendMessage({ type: "fetch-active-tab" });
       if (!resp?.ok) throw new Error(resp?.error ?? "unknown error");
@@ -57,15 +84,10 @@ export function App() {
 
   async function autoSave(result: ExtractResult) {
     const dir = await getClipsDir();
-    if (!dir) {
-      setSave({ kind: "no-folder" });
-      return;
-    }
+    if (!dir) return setSave({ kind: "no-folder" });
     const state = await ensureWritePermission(dir, false);
-    if (state !== "granted") {
-      setSave({ kind: "needs-permission", dirName: dir.name });
-      return;
-    }
+    if (state !== "granted")
+      return setSave({ kind: "needs-permission", dirName: dir.name });
     await writeToDisk(result, dir);
   }
 
@@ -86,15 +108,10 @@ export function App() {
   async function saveNow() {
     if (status.kind !== "ok") return;
     const dir = await getClipsDir();
-    if (!dir) {
-      setSave({ kind: "no-folder" });
-      return;
-    }
+    if (!dir) return setSave({ kind: "no-folder" });
     const state = await ensureWritePermission(dir, true);
-    if (state !== "granted") {
-      setSave({ kind: "error", message: "Permission denied" });
-      return;
-    }
+    if (state !== "granted")
+      return setSave({ kind: "error", message: "Permission denied" });
     await writeToDisk(status.result, dir);
   }
 
@@ -118,6 +135,78 @@ export function App() {
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     setToast(`Downloaded ${filename}`);
+  }
+
+  async function runAiAction(key: PromptKey) {
+    if (status.kind !== "ok") return;
+    const label = PROMPT_LABELS[key];
+    const prompt = await resolvePrompt(key);
+    const apiKey = await getApiKey();
+    const markdown = status.result.markdown;
+
+    if (!apiKey) {
+      setAi({ kind: "handoff", label });
+      try {
+        await claudeAiHandoff(prompt, markdown);
+        setToast(`${label} → Claude.ai (paste with Cmd+V)`);
+        setAi({ kind: "idle" });
+      } catch (err) {
+        setAi({ kind: "error", label, message: String(err) });
+      }
+      return;
+    }
+
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    setAi({ kind: "streaming", label, text: "" });
+
+    try {
+      const usage = await streamFromAnthropic(apiKey, prompt, markdown, {
+        signal: ctrl.signal,
+        onDelta: (delta) =>
+          setAi((prev) =>
+            prev.kind === "streaming" && prev.label === label
+              ? { ...prev, text: prev.text + delta }
+              : prev
+          ),
+      });
+      setAi((prev) =>
+        prev.kind === "streaming" && prev.label === label
+          ? { kind: "done", label, text: prev.text, usage }
+          : prev
+      );
+    } catch (err) {
+      if ((err as Error).name === "AbortError") {
+        setAi({ kind: "idle" });
+      } else {
+        setAi({ kind: "error", label, message: String(err) });
+      }
+    }
+  }
+
+  async function runNotebookLm() {
+    if (status.kind !== "ok") return;
+    setAi({ kind: "handoff", label: "NotebookLM" });
+    try {
+      await notebookLmHandoff(
+        clipFilename(status.result.frontmatter),
+        status.result.markdown
+      );
+      setToast("Opened NotebookLM (file downloaded)");
+      setAi({ kind: "idle" });
+    } catch (err) {
+      setAi({ kind: "error", label: "NotebookLM", message: String(err) });
+    }
+  }
+
+  function stopStreaming() {
+    abortRef.current?.abort();
+  }
+
+  function dismissAi() {
+    abortRef.current?.abort();
+    setAi({ kind: "idle" });
   }
 
   function openOptions() {
@@ -160,6 +249,14 @@ export function App() {
         />
       )}
 
+      {status.kind === "ok" && (
+        <AiBar
+          onAction={runAiAction}
+          onNotebookLm={runNotebookLm}
+          disabled={ai.kind === "streaming" || ai.kind === "handoff"}
+        />
+      )}
+
       <main className="min-h-0 flex-1 overflow-auto px-3 py-2">
         {status.kind === "idle" && (
           <p className="text-sm text-neutral-500">Ready.</p>
@@ -173,7 +270,16 @@ export function App() {
             <p className="mt-1 break-words text-xs text-red-600">{status.message}</p>
           </div>
         )}
-        {status.kind === "ok" && <Preview result={status.result} />}
+        {status.kind === "ok" && ai.kind === "idle" && (
+          <Preview result={status.result} />
+        )}
+        {status.kind === "ok" && ai.kind !== "idle" && (
+          <AiPanel
+            ai={ai}
+            onStop={stopStreaming}
+            onDismiss={dismissAi}
+          />
+        )}
       </main>
 
       <footer className="border-t border-neutral-200 px-3 py-2 text-xs text-neutral-500">
@@ -239,14 +345,13 @@ function SaveStatusLine({
   save: SaveState;
   onOpenOptions: () => void;
 }) {
-  if (save.kind === "saved") {
+  if (save.kind === "saved")
     return (
       <p className="mt-1.5 text-[11px] text-green-700">
         Saved <span className="font-mono">{save.filename}</span>
       </p>
     );
-  }
-  if (save.kind === "no-folder") {
+  if (save.kind === "no-folder")
     return (
       <p className="mt-1.5 text-[11px] text-neutral-500">
         No clips folder set —{" "}
@@ -256,20 +361,102 @@ function SaveStatusLine({
         .
       </p>
     );
-  }
-  if (save.kind === "needs-permission") {
+  if (save.kind === "needs-permission")
     return (
       <p className="mt-1.5 text-[11px] text-neutral-500">
         Click <em>Save</em> to grant write permission to {save.dirName}.
       </p>
     );
-  }
-  if (save.kind === "error") {
-    return (
-      <p className="mt-1.5 text-[11px] text-red-700">{save.message}</p>
-    );
-  }
+  if (save.kind === "error")
+    return <p className="mt-1.5 text-[11px] text-red-700">{save.message}</p>;
   return null;
+}
+
+function AiBar({
+  onAction,
+  onNotebookLm,
+  disabled,
+}: {
+  onAction: (key: PromptKey) => void;
+  onNotebookLm: () => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5 border-b border-neutral-200 px-3 py-2">
+      {ACTION_KEYS.map((k) => (
+        <button
+          key={k}
+          onClick={() => onAction(k)}
+          disabled={disabled}
+          className="rounded border border-indigo-300 bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-900 hover:bg-indigo-100 disabled:opacity-50"
+        >
+          {PROMPT_LABELS[k]}
+        </button>
+      ))}
+      <button
+        onClick={onNotebookLm}
+        disabled={disabled}
+        className="rounded border border-neutral-300 px-2 py-1 text-[11px] font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
+      >
+        NotebookLM
+      </button>
+    </div>
+  );
+}
+
+function AiPanel({
+  ai,
+  onStop,
+  onDismiss,
+}: {
+  ai: AiState;
+  onStop: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-neutral-700">
+          {ai.kind === "streaming" && `${ai.label} (streaming)`}
+          {ai.kind === "done" && ai.label}
+          {ai.kind === "handoff" && `${ai.label} → opening Claude.ai…`}
+          {ai.kind === "error" && `${ai.label} (error)`}
+        </span>
+        <div className="flex gap-1">
+          {ai.kind === "streaming" && (
+            <button
+              onClick={onStop}
+              className="rounded border border-neutral-300 px-2 py-0.5 text-[11px] hover:bg-neutral-100"
+            >
+              Stop
+            </button>
+          )}
+          <button
+            onClick={onDismiss}
+            className="rounded border border-neutral-300 px-2 py-0.5 text-[11px] hover:bg-neutral-100"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+
+      {(ai.kind === "streaming" || ai.kind === "done") && (
+        <pre className="whitespace-pre-wrap break-words rounded border border-neutral-200 bg-white p-2 text-[12px] leading-normal">
+          {ai.text || (ai.kind === "streaming" ? "…" : "(no output)")}
+        </pre>
+      )}
+      {ai.kind === "done" && (
+        <p className="text-[11px] text-neutral-500">
+          {ai.usage.input_tokens} in · {ai.usage.output_tokens} out
+          {ai.usage.cache_read_input_tokens > 0 &&
+            ` · ${ai.usage.cache_read_input_tokens} cached`}
+        </p>
+      )}
+      {ai.kind === "error" && (
+        <p className="text-[12px] text-red-700">{ai.message}</p>
+      )}
+    </div>
+  );
 }
 
 function Preview({ result }: { result: ExtractResult }) {

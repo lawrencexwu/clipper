@@ -111,31 +111,44 @@ The build orchestrator (`extension/build.mjs`) produces:
 
 ## Current phase
 
-**Phase 3 build-complete.** File System Access API integrated:
+**Phase 4 build-complete.** AI actions wired:
 
-- `extension/src/lib/idb.ts` — minimal IndexedDB wrapper (one `handles` store)
-- `extension/src/lib/fs.ts` — `pickClipsDir`, `getClipsDir`, `setClipsDir`,
-  `ensureWritePermission`, `saveClip` (with `-2/-3/...` conflict suffix),
-  `clipFilename`
-- `extension/src/options.html` + `options/Options.tsx` — "Choose clips folder"
-  button (`showDirectoryPicker`), shows current folder name + permission state,
-  Re-grant + Clear buttons
-- `extension/src/sidepanel/App.tsx` — on extract, auto-saves if a folder is set
-  and permission is `granted`; otherwise shows a Save button that requests
-  permission inside the click handler. Status line under the action bar
-  reports "Saved {filename}" / "No clips folder set" / "Permission needed"
-- `extension/manifest.json` — `options_page: "options.html"`
-- `extension/vite.config.ts` — multi-page (sidepanel + options)
-- Repo structure: `sidepanel.html` and `options.html` now live at
-  `extension/src/` (root of Vite's source) with React entries in
-  `sidepanel/` and `options/` subfolders. Shared Tailwind base at
-  `extension/src/index.css`.
+- `shared/prompts.ts` — 5 default action prompts (`summarize`, `explain`,
+  `steelman`, `extract`, `falsify`) as named exports + `DEFAULTS` map +
+  `PROMPT_LABELS`
+- `extension/src/lib/settings.ts` — `chrome.storage.local` wrapper for the
+  Anthropic API key + per-prompt overrides; `resolvePrompt(key)` returns the
+  override or the default
+- `extension/src/lib/ai.ts`
+  - `claudeAiHandoff(prompt, markdown)` — copies `prompt\n\n---\n\nmarkdown`
+    to clipboard, opens `https://claude.ai/new` in a new tab
+  - `notebookLmHandoff(filename, markdown)` — downloads the `.md`, opens
+    `https://notebooklm.google.com/`
+  - `streamFromAnthropic(apiKey, prompt, markdown, {onDelta, signal})` —
+    raw `fetch` to `api.anthropic.com/v1/messages` with `stream: true`,
+    `thinking: {type: "adaptive"}`, `cache_control` on the article body so
+    repeat actions on the same clip get cache hits. Headers include
+    `anthropic-dangerous-direct-browser-access: true`. Model: `claude-opus-4-7`.
+- `extension/src/sidepanel/App.tsx` — new AI button row (5 prompts +
+  NotebookLM). No API key → Claude.ai handoff with toast. With API key →
+  inline streaming panel in the side panel with Stop / Close buttons and
+  token usage line at the bottom (input / output / cached). One in-flight
+  stream at a time; new click aborts the previous.
+- `extension/src/options/Options.tsx` — three new sections: Anthropic API key
+  (password input with reveal/save/clear), 5 prompt-override text areas
+  (per-prompt Save + Reset-to-default, "(overridden)" tag when active), and
+  notes. Folder section unchanged.
 
-**Acceptance (needs real-Chrome verification):** Pick a folder once in
-options → clip 5 articles → all five appear as `.md` files with correct
-frontmatter → re-clipping the same article appends `-2`.
+**Acceptance (needs real-Chrome verification):**
 
-**Next: Phase 4 — AI actions (Claude.ai handoff + optional API key).**
+- All 5 actions copy the right `{prompt}\n\n---\n\n{markdown}` payload to
+  the clipboard and open Claude.ai in a new tab.
+- Custom prompts entered in options are used by the actions.
+- With an API key set, Summarize streams inline in the side panel and
+  reports input / output / cached token usage at the end.
+- NotebookLM downloads the `.md` and opens NotebookLM.
+
+**Next: Phase 5 — per-site adapters (X, Substack, NYT, archive.ph fallback).**
 
 ## Phases (high-level)
 
@@ -143,7 +156,7 @@ frontmatter → re-clipping the same article appends `-2`.
 1. Shared extraction core (generic Readability, markdown, frontmatter, slug, lang, tests) ✅
 2. Chrome extension MVP (FAB, side panel, copy/download) — build ✅, pending in-browser smoke test
 3. File System Access API integration (auto-save to chosen folder) — build ✅, pending in-browser smoke test
-4. AI actions (Claude.ai handoff + optional API key)
+4. AI actions (Claude.ai handoff + optional API key) — build ✅, pending in-browser smoke test
 5. Per-site adapters (X, Substack, NYT, archive.ph)
 6. Library + search (clip index, search/filter, tag editing)
 7. Bookmarklet (Safari iOS + Mac)
