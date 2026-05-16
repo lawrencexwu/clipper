@@ -192,7 +192,7 @@ export function App() {
       setAi({ kind: "handoff", label });
       try {
         await claudeAiHandoff(prompt, markdown);
-        setToast(`${label} → Claude.ai (paste with Cmd+V)`);
+        setToast(`${label} → sending to Claude.ai…`);
         setAi({ kind: "idle" });
       } catch (err) {
         setAi({ kind: "error", label, message: String(err) });

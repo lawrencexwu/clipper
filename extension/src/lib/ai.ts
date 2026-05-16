@@ -49,7 +49,16 @@ export async function claudeAiHandoff(
   markdown: string
 ): Promise<void> {
   const text = buildHandoffText(prompt, markdown);
-  await navigator.clipboard.writeText(text);
+  // Clipboard is the fallback if auto-fill fails (not logged in, UI change).
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    /* clipboard may be unavailable; storage handoff still works */
+  }
+  // The claude.ai content script reads this and fills + sends the composer.
+  await chrome.storage.local.set({
+    "clipper.pendingHandoff": { text, ts: Date.now() },
+  });
   await chrome.tabs.create({ url: "https://claude.ai/new" });
 }
 

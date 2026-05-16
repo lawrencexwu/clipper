@@ -45,6 +45,19 @@ async function buildContent() {
   });
 }
 
+async function buildClaudeContent() {
+  await esbuild({
+    entryPoints: [path.join(extDir, "src/content/claude.ts")],
+    outfile: path.join(distDir, "claude.js"),
+    bundle: true,
+    format: "iife",
+    target: "chrome114",
+    platform: "browser",
+    minify: false,
+    sourcemap: false,
+  });
+}
+
 async function buildSidePanel() {
   await viteBuild({
     configFile: path.join(extDir, "vite.config.ts"),
@@ -77,6 +90,11 @@ async function summarize() {
 }
 
 await clean();
-await Promise.all([buildBackground(), buildContent(), buildSidePanel()]);
+await Promise.all([
+  buildBackground(),
+  buildContent(),
+  buildClaudeContent(),
+  buildSidePanel(),
+]);
 await copyManifest();
 await summarize();

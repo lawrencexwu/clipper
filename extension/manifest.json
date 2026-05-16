@@ -21,6 +21,11 @@
       "matches": ["<all_urls>"],
       "js": ["content.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://claude.ai/*"],
+      "js": ["claude.js"],
+      "run_at": "document_idle"
     }
   ],
   "commands": {
