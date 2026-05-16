@@ -75,11 +75,30 @@ export function App() {
   const [toast, setToast] = useState<string | null>(null);
   const [archiveOn, setArchiveOn] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const runningRef = useRef(false);
 
   useEffect(() => {
     void getArchiveFallback().then(setArchiveOn);
     void runClip();
     return () => abortRef.current?.abort();
+  }, []);
+
+  // The side panel persists across tab navigations, so a fresh trigger
+  // (FAB / shortcut / context menu) won't remount it. The background
+  // broadcasts "reclip" on every trigger; re-extract the active tab.
+  useEffect(() => {
+    function onMessage(msg: unknown) {
+      if (
+        msg &&
+        typeof msg === "object" &&
+        (msg as { type?: string }).type === "reclip"
+      ) {
+        setTab("current");
+        void runClip();
+      }
+    }
+    chrome.runtime.onMessage.addListener(onMessage);
+    return () => chrome.runtime.onMessage.removeListener(onMessage);
   }, []);
 
   useEffect(() => {
@@ -89,6 +108,9 @@ export function App() {
   }, [toast]);
 
   async function runClip() {
+    if (runningRef.current) return; // collapse concurrent triggers
+    runningRef.current = true;
+    abortRef.current?.abort(); // cancel any in-flight AI stream
     setStatus({ kind: "loading" });
     setSave({ kind: "idle" });
     setAi({ kind: "idle" });
@@ -107,6 +129,8 @@ export function App() {
       void autoSave(result);
     } catch (err) {
       setStatus({ kind: "error", message: String(err) });
+    } finally {
+      runningRef.current = false;
     }
   }
 

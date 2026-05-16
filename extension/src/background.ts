@@ -15,7 +15,10 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 chrome.commands.onCommand.addListener(async (command) => {
-  if (command === "clip-current-tab") await openOnActiveTab();
+  if (command === "clip-current-tab") {
+    await openOnActiveTab();
+    notifyReclip();
+  }
 });
 
 chrome.contextMenus.onClicked.addListener(async (_info, tab) => {
@@ -23,8 +26,20 @@ chrome.contextMenus.onClicked.addListener(async (_info, tab) => {
     await chrome.sidePanel
       .open({ tabId: tab.id, windowId: tab.windowId })
       .catch((err) => console.error("Clipper:", err));
+    notifyReclip();
   }
 });
+
+// Tell an already-open side panel to re-extract the active tab. If the panel
+// isn't open yet it has no listener and the message is harmlessly dropped —
+// the panel's mount-time clip covers that case.
+function notifyReclip(): void {
+  setTimeout(() => {
+    chrome.runtime.sendMessage({ type: "reclip" }).catch(() => {
+      /* no receiver — panel not open yet */
+    });
+  }, 150);
+}
 
 async function openOnActiveTab(): Promise<void> {
   const [tab] = await chrome.tabs.query({
@@ -45,7 +60,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (tabId !== undefined && windowId !== undefined) {
       chrome.sidePanel
         .open({ tabId, windowId })
-        .then(() => sendResponse({ ok: true }))
+        .then(() => {
+          notifyReclip();
+          sendResponse({ ok: true });
+        })
         .catch((err) => sendResponse({ ok: false, error: String(err) }));
       return true;
     }
