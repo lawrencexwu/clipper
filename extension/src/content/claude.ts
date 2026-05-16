@@ -9,17 +9,23 @@
   const POLL_MS = 300;
   const TIMEOUT_MS = 20_000;
 
-  chrome.storage.local.get(KEY, (r) => {
-    const pending = r[KEY] as { text: string; ts: number } | undefined;
-    if (!pending || !pending.text) return;
-    if (Date.now() - pending.ts > MAX_AGE_MS) {
+  try {
+    if (!chrome.runtime || !chrome.runtime.id) return;
+    chrome.storage.local.get(KEY, (r) => {
+      if (chrome.runtime.lastError) return;
+      const pending = r[KEY] as { text: string; ts: number } | undefined;
+      if (!pending || !pending.text) return;
+      if (Date.now() - pending.ts > MAX_AGE_MS) {
+        chrome.storage.local.remove(KEY);
+        return;
+      }
+      // Claim it now so the post-send navigation doesn't resend.
       chrome.storage.local.remove(KEY);
-      return;
-    }
-    // Claim it now so the post-send navigation doesn't resend.
-    chrome.storage.local.remove(KEY);
-    waitForComposer(pending.text);
-  });
+      waitForComposer(pending.text);
+    });
+  } catch {
+    /* stale context after an extension reload — nothing to do */
+  }
 
   function waitForComposer(text: string): void {
     const start = Date.now();

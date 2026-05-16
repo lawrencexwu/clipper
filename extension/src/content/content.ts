@@ -11,11 +11,30 @@
   const DEFAULT_RIGHT = 16;
   const DEFAULT_BOTTOM = 16;
 
-  chrome.storage.local.get("fabHideHosts", (r) => {
-    const hide = r.fabHideHosts;
-    if (Array.isArray(hide) && hide.includes(host)) return;
-    mount();
-  });
+  // After the extension is reloaded/updated, this old content script keeps
+  // running in already-open tabs but its chrome.* context is gone. Guard
+  // every chrome call so a stale instance fails silently instead of
+  // throwing "Extension context invalidated".
+  function extAlive(): boolean {
+    try {
+      return !!(chrome.runtime && chrome.runtime.id);
+    } catch {
+      return false;
+    }
+  }
+
+  if (!extAlive()) return;
+
+  try {
+    chrome.storage.local.get("fabHideHosts", (r) => {
+      if (chrome.runtime.lastError) return;
+      const hide = r.fabHideHosts;
+      if (Array.isArray(hide) && hide.includes(host)) return;
+      mount();
+    });
+  } catch {
+    return;
+  }
 
   function mount() {
 
@@ -46,15 +65,22 @@
     padding: "0",
   } as CSSStyleDeclaration);
 
-  chrome.storage.local.get(storageKey, (result) => {
-    const pos = result[storageKey] as { left: number; top: number } | undefined;
-    if (pos && typeof pos.left === "number" && typeof pos.top === "number") {
-      fab.style.left = `${pos.left}px`;
-      fab.style.top = `${pos.top}px`;
-      fab.style.right = "auto";
-      fab.style.bottom = "auto";
-    }
-  });
+  try {
+    chrome.storage.local.get(storageKey, (result) => {
+      if (chrome.runtime.lastError) return;
+      const pos = result[storageKey] as
+        | { left: number; top: number }
+        | undefined;
+      if (pos && typeof pos.left === "number" && typeof pos.top === "number") {
+        fab.style.left = `${pos.left}px`;
+        fab.style.top = `${pos.top}px`;
+        fab.style.right = "auto";
+        fab.style.bottom = "auto";
+      }
+    });
+  } catch {
+    /* stale context — leave the FAB at its default position */
+  }
 
   let dragging = false;
   let moved = false;
@@ -90,7 +116,13 @@
     if (moved) {
       const left = parseInt(fab.style.left || "0", 10);
       const top = parseInt(fab.style.top || "0", 10);
-      chrome.storage.local.set({ [storageKey]: { left, top } });
+      if (extAlive()) {
+        try {
+          chrome.storage.local.set({ [storageKey]: { left, top } });
+        } catch {
+          /* stale context — position just won't persist */
+        }
+      }
     }
   });
 
@@ -100,8 +132,23 @@
       moved = false;
       return;
     }
-    chrome.runtime.sendMessage({ type: "open-side-panel" });
+    if (!extAlive()) {
+      signalStale();
+      return;
+    }
+    try {
+      const p = chrome.runtime.sendMessage({ type: "open-side-panel" });
+      if (p && typeof p.catch === "function") p.catch(() => signalStale());
+    } catch {
+      signalStale();
+    }
   });
+
+  function signalStale() {
+    fab.textContent = "↻";
+    fab.title = "Clipper was updated — refresh this page to re-enable";
+    fab.style.background = "#b45309";
+  }
 
     document.documentElement.appendChild(fab);
   }
