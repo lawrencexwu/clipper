@@ -6,6 +6,7 @@ import { extract } from "../extractor.js";
 import { matchX, xAdapter } from "../adapters/x.js";
 import { matchSubstack, substackAdapter } from "../adapters/substack.js";
 import { matchNyt, nytAdapter } from "../adapters/nyt.js";
+import { matchVocus, vocusAdapter } from "../adapters/vocus.js";
 import { archivePhUrl, shouldOfferArchive } from "../archive.js";
 
 function loadFixture(name: string, url: string): Document {
@@ -47,6 +48,25 @@ describe("matchers", () => {
     expect(matchNyt("https://nytimes.com/2026/03/15/munis.html")).toBe(true);
     expect(matchNyt("https://cooking.nytimes.com/recipes/1")).toBe(true);
     expect(matchNyt("https://nytimes.example.com/spoof")).toBe(false);
+  });
+
+  it("matchSubstack recognises the substack.com Reader inbox view", () => {
+    const doc = new JSDOM(
+      '<!doctype html><html><head></head><body></body></html>',
+      { url: "https://substack.com/inbox/post/197316245" }
+    ).window.document as unknown as Document;
+    expect(
+      matchSubstack("https://substack.com/inbox/post/197316245", doc)
+    ).toBe(true);
+    expect(matchSubstack("https://substack.com/p/some-slug", doc)).toBe(true);
+    expect(matchSubstack("https://substack.com/", doc)).toBe(false);
+  });
+
+  it("matchVocus recognises vocus.cc hosts", () => {
+    expect(matchVocus("https://vocus.cc/article/abc123")).toBe(true);
+    expect(matchVocus("https://www.vocus.cc/user/1/article-slug")).toBe(true);
+    expect(matchVocus("https://vocus.cc.example.com/spoof")).toBe(false);
+    expect(matchVocus("https://example.com/vocus.cc/x")).toBe(false);
   });
 });
 
@@ -131,6 +151,37 @@ describe("nytAdapter", () => {
     expect(result).not.toBeNull();
     expect(result!.frontmatter.adapter).toBe("nyt");
     expect(result!.frontmatter.author).toBe("Sarah Reporter");
+  });
+});
+
+describe("vocusAdapter", () => {
+  it("extracts the article body and identifies Traditional Chinese", () => {
+    const url = "https://vocus.cc/article/6a5e1c87fd897800010ccf61";
+    const doc = loadFixture("vocus-article.html", url);
+    const result = vocusAdapter(doc);
+
+    expect(result).not.toBeNull();
+    const r = result!;
+    expect(r.adapter).toBe("vocus");
+    expect(r.title).toBe("台灣半導體產業的下一個十年");
+    expect(r.author).toBe("王大明");
+    expect(r.published).toBe("2026-05-14");
+    expect(r.contentHtml).toMatch(/技術演進/);
+    expect(r.contentHtml).toMatch(/地緣政治/);
+    expect(r.contentHtml).not.toMatch(/相關文章/);
+    expect(r.contentHtml).not.toMatch(/留言區/);
+  });
+
+  it("end-to-end via extract() lands on the vocus adapter and detects zh-Hant", () => {
+    const url = "https://vocus.cc/article/6a5e1c87fd897800010ccf61";
+    const doc = loadFixture("vocus-article.html", url);
+    const result = extract(doc, url);
+    expect(result).not.toBeNull();
+    expect(result!.frontmatter.adapter).toBe("vocus");
+    expect(result!.frontmatter.source).toBe("vocus.cc");
+    expect(result!.frontmatter.lang).toBe("zh-Hant");
+    expect(result!.frontmatter.author).toBe("王大明");
+    expect(result!.body).toMatch(/## 技術演進/);
   });
 });
 

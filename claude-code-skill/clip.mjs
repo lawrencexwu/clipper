@@ -133,6 +133,9 @@ function matchSubstack(url, doc) {
   try {
     const u = new URL(url);
     if (/\.substack\.com$/.test(u.hostname)) return true;
+    if (u.hostname === "substack.com" && /^\/(inbox\/post|p|inbox\/p)\//.test(u.pathname)) {
+      return true;
+    }
   } catch {
   }
   const gen = doc.querySelector('meta[name="generator"]')?.getAttribute("content");
@@ -246,11 +249,143 @@ function matchDate2(raw) {
   return m ? m[1] : void 0;
 }
 
+// shared/adapters/vocus.ts
+function matchVocus(url) {
+  try {
+    const u = new URL(url);
+    return /(^|\.)vocus\.cc$/.test(u.hostname);
+  } catch {
+    return false;
+  }
+}
+function vocusAdapter(doc) {
+  const jsonLd = readArticleJsonLd(doc);
+  const contentHtml = findBodyHtml(doc) ?? (jsonLd?.articleBody ? `<p>${escapeHtml3(jsonLd.articleBody)}</p>` : null);
+  if (!contentHtml) return null;
+  const title = jsonLd?.headline ?? metaContent(doc, 'meta[property="og:title"]') ?? doc.querySelector("h1")?.textContent?.trim() ?? doc.title.replace(/\s*\|\s*方格子[\s\S]*$/, "").trim();
+  const author = jsonLd?.author ?? metaContent(doc, 'meta[name="author"]') ?? metaContent(doc, 'meta[property="article:author"]') ?? doc.querySelector('[data-testid="author-name"], .author-name, a[href*="/user/"]')?.textContent?.trim() ?? "";
+  const published = matchDate3(
+    metaContent(doc, 'meta[property="article:published_time"]') ?? metaContent(doc, 'meta[name="date"]') ?? jsonLd?.datePublished
+  ) ?? matchDate3(doc.querySelector("time[datetime]")?.getAttribute("datetime")) ?? "";
+  return {
+    title,
+    contentHtml,
+    author,
+    published,
+    adapter: "vocus"
+  };
+}
+function findBodyHtml(doc) {
+  const selectors = [
+    '[itemprop="articleBody"]',
+    "article .article-content",
+    "article [class*='ArticleContent' i]",
+    "article [class*='PostContent' i]",
+    "article [class*='content' i]",
+    "main article",
+    "article",
+    ".article-content",
+    ".post-content",
+    "#article-content",
+    "main [role='article']"
+  ];
+  for (const sel of selectors) {
+    const el = doc.querySelector(sel);
+    if (el && (el.textContent ?? "").trim().length > 200) {
+      return stripUiChrome(el).innerHTML;
+    }
+  }
+  return null;
+}
+function stripUiChrome(el) {
+  const clone = el.cloneNode(true);
+  const junkSelectors = [
+    "[class*='share' i]",
+    "[class*='comment' i]",
+    "[class*='related' i]",
+    "[class*='recommend' i]",
+    "[class*='subscribe' i]",
+    "[class*='paywall' i]",
+    "[class*='sidebar' i]",
+    "button",
+    "script",
+    "style"
+  ];
+  for (const sel of junkSelectors) {
+    for (const j of Array.from(clone.querySelectorAll(sel))) j.remove();
+  }
+  return clone;
+}
+function readArticleJsonLd(doc) {
+  const scripts = Array.from(
+    doc.querySelectorAll('script[type="application/ld+json"]')
+  );
+  for (const s of scripts) {
+    const raw = s.textContent?.trim();
+    if (!raw) continue;
+    try {
+      const data = JSON.parse(raw);
+      const article = pickArticle(data);
+      if (article) return article;
+    } catch {
+    }
+  }
+  return null;
+}
+function pickArticle(data) {
+  if (!data || typeof data !== "object") return null;
+  const nodes = Array.isArray(data) ? data : data["@graph"] ?? [data];
+  for (const node of nodes) {
+    if (!node || typeof node !== "object") continue;
+    const t = node["@type"];
+    const isArticle = Array.isArray(t) ? t.some((x) => typeof x === "string" && /Article|BlogPosting|NewsArticle/i.test(x)) : typeof t === "string" && /Article|BlogPosting|NewsArticle/i.test(t);
+    if (!isArticle) continue;
+    const n = node;
+    const author = extractAuthorName(n.author);
+    return {
+      headline: typeof n.headline === "string" ? n.headline : void 0,
+      articleBody: typeof n.articleBody === "string" ? n.articleBody : void 0,
+      author,
+      datePublished: typeof n.datePublished === "string" ? n.datePublished : void 0
+    };
+  }
+  return null;
+}
+function extractAuthorName(a) {
+  if (!a) return void 0;
+  if (typeof a === "string") return a;
+  if (Array.isArray(a)) {
+    for (const item of a) {
+      const name = extractAuthorName(item);
+      if (name) return name;
+    }
+    return void 0;
+  }
+  if (typeof a === "object") {
+    const name = a.name;
+    if (typeof name === "string") return name;
+  }
+  return void 0;
+}
+function metaContent(doc, selector) {
+  const v = doc.querySelector(selector)?.getAttribute("content")?.trim();
+  return v || void 0;
+}
+function matchDate3(raw) {
+  if (!raw) return void 0;
+  const m = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : void 0;
+}
+function escapeHtml3(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 // shared/adapters/index.ts
 var adapters = [
   { name: "x", match: (url) => matchX(url), run: xAdapter },
   { name: "substack", match: matchSubstack, run: substackAdapter },
-  { name: "nyt", match: (url) => matchNyt(url), run: nytAdapter }
+  { name: "nyt", match: (url) => matchNyt(url), run: nytAdapter },
+  { name: "vocus", match: (url) => matchVocus(url), run: vocusAdapter }
 ];
 function dispatch(doc, url) {
   for (const a of adapters) {

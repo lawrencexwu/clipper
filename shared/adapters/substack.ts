@@ -4,6 +4,13 @@ export function matchSubstack(url: string, doc: Document): boolean {
   try {
     const u = new URL(url);
     if (/\.substack\.com$/.test(u.hostname)) return true;
+    // Substack Reader / inbox view — same rendering, different origin.
+    if (
+      u.hostname === "substack.com" &&
+      /^\/(inbox\/post|p|inbox\/p)\//.test(u.pathname)
+    ) {
+      return true;
+    }
   } catch {
     /* fall through */
   }
