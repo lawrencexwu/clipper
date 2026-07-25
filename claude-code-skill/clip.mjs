@@ -1,4 +1,146 @@
 #!/usr/bin/env node
+var __create = Object.create;
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __commonJS = (cb, mod) => function __require() {
+  return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+};
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
+
+// node_modules/turndown-plugin-gfm/lib/turndown-plugin-gfm.cjs.js
+var require_turndown_plugin_gfm_cjs = __commonJS({
+  "node_modules/turndown-plugin-gfm/lib/turndown-plugin-gfm.cjs.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    var highlightRegExp = /highlight-(?:text|source)-([a-z0-9]+)/;
+    function highlightedCodeBlock(turndownService) {
+      turndownService.addRule("highlightedCodeBlock", {
+        filter: function(node) {
+          var firstChild = node.firstChild;
+          return node.nodeName === "DIV" && highlightRegExp.test(node.className) && firstChild && firstChild.nodeName === "PRE";
+        },
+        replacement: function(content, node, options) {
+          var className = node.className || "";
+          var language = (className.match(highlightRegExp) || [null, ""])[1];
+          return "\n\n" + options.fence + language + "\n" + node.firstChild.textContent + "\n" + options.fence + "\n\n";
+        }
+      });
+    }
+    function strikethrough(turndownService) {
+      turndownService.addRule("strikethrough", {
+        filter: ["del", "s", "strike"],
+        replacement: function(content) {
+          return "~" + content + "~";
+        }
+      });
+    }
+    var indexOf = Array.prototype.indexOf;
+    var every = Array.prototype.every;
+    var rules = {};
+    rules.tableCell = {
+      filter: ["th", "td"],
+      replacement: function(content, node) {
+        return cell(content, node);
+      }
+    };
+    rules.tableRow = {
+      filter: "tr",
+      replacement: function(content, node) {
+        var borderCells = "";
+        var alignMap = { left: ":--", right: "--:", center: ":-:" };
+        if (isHeadingRow(node)) {
+          for (var i = 0; i < node.childNodes.length; i++) {
+            var border = "---";
+            var align = (node.childNodes[i].getAttribute("align") || "").toLowerCase();
+            if (align) border = alignMap[align] || border;
+            borderCells += cell(border, node.childNodes[i]);
+          }
+        }
+        return "\n" + content + (borderCells ? "\n" + borderCells : "");
+      }
+    };
+    rules.table = {
+      // Only convert tables with a heading row.
+      // Tables with no heading row are kept using `keep` (see below).
+      filter: function(node) {
+        return node.nodeName === "TABLE" && isHeadingRow(node.rows[0]);
+      },
+      replacement: function(content) {
+        content = content.replace("\n\n", "\n");
+        return "\n\n" + content + "\n\n";
+      }
+    };
+    rules.tableSection = {
+      filter: ["thead", "tbody", "tfoot"],
+      replacement: function(content) {
+        return content;
+      }
+    };
+    function isHeadingRow(tr) {
+      var parentNode = tr.parentNode;
+      return parentNode.nodeName === "THEAD" || parentNode.firstChild === tr && (parentNode.nodeName === "TABLE" || isFirstTbody(parentNode)) && every.call(tr.childNodes, function(n) {
+        return n.nodeName === "TH";
+      });
+    }
+    function isFirstTbody(element) {
+      var previousSibling = element.previousSibling;
+      return element.nodeName === "TBODY" && (!previousSibling || previousSibling.nodeName === "THEAD" && /^\s*$/i.test(previousSibling.textContent));
+    }
+    function cell(content, node) {
+      var index = indexOf.call(node.parentNode.childNodes, node);
+      var prefix = " ";
+      if (index === 0) prefix = "| ";
+      return prefix + content + " |";
+    }
+    function tables(turndownService) {
+      turndownService.keep(function(node) {
+        return node.nodeName === "TABLE" && !isHeadingRow(node.rows[0]);
+      });
+      for (var key in rules) turndownService.addRule(key, rules[key]);
+    }
+    function taskListItems(turndownService) {
+      turndownService.addRule("taskListItems", {
+        filter: function(node) {
+          return node.type === "checkbox" && node.parentNode.nodeName === "LI";
+        },
+        replacement: function(content, node) {
+          return (node.checked ? "[x]" : "[ ]") + " ";
+        }
+      });
+    }
+    function gfm2(turndownService) {
+      turndownService.use([
+        highlightedCodeBlock,
+        strikethrough,
+        tables,
+        taskListItems
+      ]);
+    }
+    exports.gfm = gfm2;
+    exports.highlightedCodeBlock = highlightedCodeBlock;
+    exports.strikethrough = strikethrough;
+    exports.tables = tables;
+    exports.taskListItems = taskListItems;
+  }
+});
 
 // claude-code-skill/clip.ts
 import { existsSync } from "node:fs";
@@ -397,6 +539,7 @@ function dispatch(doc, url) {
 }
 
 // shared/markdown.ts
+var import_turndown_plugin_gfm = __toESM(require_turndown_plugin_gfm_cjs(), 1);
 import TurndownService from "turndown";
 function createTurndown() {
   const td = new TurndownService({
@@ -408,6 +551,7 @@ function createTurndown() {
     linkStyle: "inlined",
     hr: "---"
   });
+  td.use(import_turndown_plugin_gfm.gfm);
   td.addRule("strip-empty-paragraph", {
     filter: (node) => node.nodeName === "P" && (node.textContent ?? "").trim() === "" && node.childElementCount === 0,
     replacement: () => ""
@@ -508,15 +652,107 @@ function detectLang(text) {
   return "other";
 }
 
+// shared/images.ts
+var LAZY_SRC_ATTRS = [
+  "data-src",
+  "data-original",
+  "data-lazy-src",
+  "data-lazy",
+  "data-hi-res-src",
+  "data-full-src",
+  "data-image-src"
+];
+function preprocessLazyImages(doc) {
+  for (const img of Array.from(doc.querySelectorAll("img"))) {
+    const raw = img.getAttribute("src");
+    if (!raw || isPlaceholder(raw)) {
+      const promoted = LAZY_SRC_ATTRS.map((a) => img.getAttribute(a)).find(
+        (v) => !!v && !isPlaceholder(v)
+      );
+      if (promoted) {
+        img.setAttribute("src", promoted);
+      } else {
+        const srcset = img.getAttribute("srcset") ?? img.getAttribute("data-srcset");
+        if (srcset) {
+          const best = pickLargestFromSrcset(srcset);
+          if (best) img.setAttribute("src", best);
+        }
+      }
+    }
+    const current = img.getAttribute("src");
+    if (current && !isDataUrl(current) && !/^https?:\/\//i.test(current)) {
+      try {
+        img.setAttribute("src", new URL(current, doc.baseURI).toString());
+      } catch {
+      }
+    }
+  }
+}
+function isPlaceholder(s) {
+  if (!s) return true;
+  if (isDataUrl(s)) return true;
+  if (/\/(spacer|placeholder|blank|transparent|1x1|1px)\b/i.test(s)) return true;
+  return false;
+}
+function isDataUrl(s) {
+  return /^data:/i.test(s);
+}
+function pickLargestFromSrcset(srcset) {
+  let bestUrl = "";
+  let bestWidth = -1;
+  for (const raw of srcset.split(",")) {
+    const entry = raw.trim();
+    if (!entry) continue;
+    const parts = entry.split(/\s+/);
+    const url = parts[0];
+    if (!url) continue;
+    const descriptor = parts[1] ?? "";
+    const width = parseWidth(descriptor);
+    if (width >= bestWidth) {
+      bestUrl = url;
+      bestWidth = width;
+    }
+  }
+  return bestUrl || null;
+}
+function parseWidth(descriptor) {
+  if (descriptor.endsWith("w")) return parseInt(descriptor, 10) || 0;
+  if (descriptor.endsWith("x")) return Math.round((parseFloat(descriptor) || 0) * 1e3);
+  return 0;
+}
+
+// shared/canonical.ts
+function resolveCanonicalUrl(doc, fallback) {
+  const link = doc.querySelector('link[rel="canonical"]')?.getAttribute("href");
+  const linkResolved = safeResolve(link, fallback);
+  if (linkResolved) return linkResolved;
+  const og = doc.querySelector('meta[property="og:url"]')?.getAttribute("content");
+  const ogResolved = safeResolve(og, fallback);
+  if (ogResolved) return ogResolved;
+  return fallback;
+}
+function safeResolve(href, base) {
+  if (!href) return null;
+  const trimmed = href.trim();
+  if (!trimmed) return null;
+  try {
+    return new URL(trimmed, base).toString();
+  } catch {
+    return null;
+  }
+}
+
 // shared/extractor.ts
 function extract(doc, url) {
-  const a = dispatch(doc, url);
+  preprocessLazyImages(doc);
+  const canonicalUrl = resolveCanonicalUrl(doc, url);
+  const a = dispatch(doc, canonicalUrl);
   if (!a) return null;
   const body = htmlToMarkdown(a.contentHtml);
   const fm = {
     title: a.title,
-    url,
-    source: bareDomain(url),
+    url: canonicalUrl,
+    source: bareDomain(canonicalUrl),
     author: a.author,
     published: a.published,
     clipped: nowIso(),

@@ -33,4 +33,32 @@ describe("htmlToMarkdown", () => {
   it("returns empty string for empty input", () => {
     expect(htmlToMarkdown("")).toBe("");
   });
+
+  it("converts tables to pipe-style GFM", () => {
+    const html = `
+      <table>
+        <thead><tr><th>Metric</th><th>Q3</th><th>Q4</th></tr></thead>
+        <tbody>
+          <tr><td>Revenue</td><td>$2.1B</td><td>$2.4B</td></tr>
+          <tr><td>Margin</td><td>34%</td><td>38%</td></tr>
+        </tbody>
+      </table>`;
+    const md = htmlToMarkdown(html);
+    expect(md).toMatch(/\| Metric\s*\| Q3\s*\| Q4\s*\|/);
+    expect(md).toMatch(/\| ---+ \| ---+ \| ---+ \|/);
+    expect(md).toMatch(/\| Revenue\s*\| \$2\.1B\s*\| \$2\.4B\s*\|/);
+    expect(md).toMatch(/\| Margin\s*\| 34%\s*\| 38%\s*\|/);
+  });
+
+  it("preserves strikethrough (plugin emits single-tilde form)", () => {
+    expect(htmlToMarkdown("<p><del>old</del> new</p>")).toContain("~old~ new");
+  });
+
+  it("preserves task list items", () => {
+    const html =
+      '<ul><li><input type="checkbox" checked> done</li><li><input type="checkbox"> todo</li></ul>';
+    const md = htmlToMarkdown(html);
+    expect(md).toMatch(/-\s+\[x\]\s+done/);
+    expect(md).toMatch(/-\s+\[ \]\s+todo/);
+  });
 });

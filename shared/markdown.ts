@@ -1,4 +1,8 @@
 import TurndownService from "turndown";
+// GFM plugin bundle: tables, strikethrough, task lists. No published types.
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-expect-error — turndown-plugin-gfm has no type declarations
+import { gfm } from "turndown-plugin-gfm";
 
 export function createTurndown(): TurndownService {
   const td = new TurndownService({
@@ -10,6 +14,8 @@ export function createTurndown(): TurndownService {
     linkStyle: "inlined",
     hr: "---",
   });
+
+  td.use(gfm);
 
   td.addRule("strip-empty-paragraph", {
     filter: (node) =>

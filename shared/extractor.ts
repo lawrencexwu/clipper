@@ -8,6 +8,7 @@ import {
 } from "./frontmatter.js";
 import { detectLang } from "./lang.js";
 import { preprocessLazyImages } from "./images.js";
+import { resolveCanonicalUrl } from "./canonical.js";
 
 export interface ExtractResult {
   frontmatter: Frontmatter;
@@ -17,14 +18,15 @@ export interface ExtractResult {
 
 export function extract(doc: Document, url: string): ExtractResult | null {
   preprocessLazyImages(doc);
-  const a = dispatch(doc, url);
+  const canonicalUrl = resolveCanonicalUrl(doc, url);
+  const a = dispatch(doc, canonicalUrl);
   if (!a) return null;
 
   const body = htmlToMarkdown(a.contentHtml);
   const fm: Frontmatter = {
     title: a.title,
-    url,
-    source: bareDomain(url),
+    url: canonicalUrl,
+    source: bareDomain(canonicalUrl),
     author: a.author,
     published: a.published,
     clipped: nowIso(),
