@@ -4,6 +4,7 @@ import type { Frontmatter } from "@shared/frontmatter.js";
 import { PROMPT_LABELS, type PromptKey } from "@shared/prompts.js";
 import { archivePhUrl, shouldOfferArchive } from "@shared/archive.js";
 import {
+  appendAiSection,
   clipFilename,
   ensureWritePermission,
   getClipsDir,
@@ -205,21 +206,37 @@ export function App() {
     abortRef.current = ctrl;
     setAi({ kind: "streaming", label, text: "" });
 
+    let fullText = "";
     try {
       const usage = await streamFromAnthropic(apiKey, prompt, markdown, {
         signal: ctrl.signal,
-        onDelta: (delta) =>
+        onDelta: (delta) => {
+          fullText += delta;
           setAi((prev) =>
             prev.kind === "streaming" && prev.label === label
               ? { ...prev, text: prev.text + delta }
               : prev
-          ),
+          );
+        },
       });
       setAi((prev) =>
         prev.kind === "streaming" && prev.label === label
-          ? { kind: "done", label, text: prev.text, usage }
+          ? { kind: "done", label, text: fullText, usage }
           : prev
       );
+      // Persist the AI output back to the clip file so a clip accretes
+      // analyses over time. Only possible when the clip is on disk.
+      if (save.kind === "saved" && fullText.trim()) {
+        const dir = await getClipsDir();
+        if (dir) {
+          try {
+            await appendAiSection(dir, save.filename, label, fullText);
+            setToast(`Appended ${label} to ${save.filename}`);
+          } catch (err) {
+            setToast(`Append to clip failed: ${String(err)}`);
+          }
+        }
+      }
     } catch (err) {
       if ((err as Error).name === "AbortError") {
         setAi({ kind: "idle" });
@@ -568,6 +585,12 @@ function Preview({
 }) {
   const fm = result.frontmatter;
   const sparse = shouldOfferArchive(fm.word_count);
+  const coverage =
+    result.visible_words > 0 ? fm.word_count / result.visible_words : 1;
+  // Only flag pages substantial enough to be an article (>= 500 visible
+  // words) where we captured less than a quarter of them.
+  const suspicious =
+    !sparse && result.visible_words >= 500 && coverage < 0.25;
   return (
     <div className="space-y-3">
       <FrontmatterCard fm={fm} />
@@ -582,6 +605,14 @@ function Preview({
           >
             Open archive.ph
           </a>
+        </div>
+      )}
+      {suspicious && (
+        <div className="rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900">
+          <span className="font-medium">Possible extraction gap.</span>{" "}
+          Captured {fm.word_count} of ~{result.visible_words} visible
+          words ({Math.round(coverage * 100)}%). Skim the preview before
+          relying on this clip.
         </div>
       )}
       <pre className="whitespace-pre-wrap break-words rounded border border-neutral-200 bg-white p-2 font-mono text-[11px] leading-snug">

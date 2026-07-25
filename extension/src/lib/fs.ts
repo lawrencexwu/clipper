@@ -137,3 +137,38 @@ export async function rewriteFrontmatter(
   await writable.close();
   return newMarkdown;
 }
+
+// Append an AI-action result to the clip file as a new section. Successive
+// calls stack under a common "AI actions" heading so a clip accretes
+// analyses over time — run Summarize now, come back next week and run
+// Extract, both are visible at the bottom of the same .md.
+export async function appendAiSection(
+  dir: FileSystemDirectoryHandle,
+  filename: string,
+  label: string,
+  body: string
+): Promise<void> {
+  const fileHandle = await dir.getFileHandle(filename);
+  const file = await fileHandle.getFile();
+  const existing = await file.text();
+
+  const stamp = humanTimestamp();
+  const trimmedBody = body.trim();
+  const alreadyHasHeader = /\n## AI actions\s*\n/.test(existing);
+  const heading = alreadyHasHeader ? "" : "\n\n---\n\n## AI actions\n";
+  const section =
+    `${heading}\n\n### ${label} · ${stamp}\n\n${trimmedBody}\n`;
+
+  const combined = existing.replace(/\s*$/, "") + section;
+  const writable = await fileHandle.createWritable();
+  await writable.write(combined);
+  await writable.close();
+}
+
+function humanTimestamp(date: Date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
+    `${pad(date.getHours())}:${pad(date.getMinutes())}`
+  );
+}

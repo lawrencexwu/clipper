@@ -35,6 +35,18 @@ describe("extract: generic blog fixture", () => {
     expect(r.markdown.startsWith("---\n")).toBe(true);
     expect(r.markdown).toContain("\n---\n");
   });
+
+  it("reports a plausible visible-word estimate for coverage checks", () => {
+    const doc = loadFixture(
+      "generic-blog.html",
+      "https://doohickey.example/widgets"
+    );
+    const r = extract(doc, "https://doohickey.example/widgets")!;
+    expect(r.visible_words).toBeGreaterThan(r.frontmatter.word_count * 0.7);
+    // The article is basically the whole page → coverage should be high.
+    const coverage = r.frontmatter.word_count / r.visible_words;
+    expect(coverage).toBeGreaterThan(0.5);
+  });
 });
 
 describe("extract: substack-free fixture", () => {
