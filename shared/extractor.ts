@@ -7,6 +7,7 @@ import {
   type Frontmatter,
 } from "./frontmatter.js";
 import { detectLang } from "./lang.js";
+import { preprocessLazyImages } from "./images.js";
 
 export interface ExtractResult {
   frontmatter: Frontmatter;
@@ -15,6 +16,7 @@ export interface ExtractResult {
 }
 
 export function extract(doc: Document, url: string): ExtractResult | null {
+  preprocessLazyImages(doc);
   const a = dispatch(doc, url);
   if (!a) return null;
 
