@@ -1,0 +1,16 @@
+{
+  "name": "clipper-skill",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "clip.mjs",
+  "bin": "clip.mjs",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.5.0",
+    "jsdom": "^24.1.0",
+    "turndown": "^7.2.0"
+  }
+}

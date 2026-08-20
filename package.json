@@ -1,0 +1,40 @@
+{
+  "name": "clipper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Personal web-content capture and analysis tool",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "build:extension": "node extension/build.mjs",
+    "build:bookmarklet": "node bookmarklet/build.js",
+    "build:shortcut": "node ios-shortcut/build.js",
+    "build:skill": "node claude-code-skill/build.mjs"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.5.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "turndown": "^7.2.0",
+    "turndown-plugin-gfm": "^1.0.2"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "@types/jsdom": "^21.1.7",
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@types/turndown": "^5.0.4",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.19",
+    "esbuild": "^0.21.0",
+    "jsdom": "^24.1.0",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.4",
+    "typescript": "^5.4.5",
+    "vite": "^5.3.1",
+    "vitest": "^1.6.0"
+  }
+}

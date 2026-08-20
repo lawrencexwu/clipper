@@ -1,0 +1,451 @@
+# Clipper
+
+Personal web-content capture and analysis tool for Lawrence. Side-loaded on his
+own devices; not for distribution. Read this file at the start of every session.
+
+## Summary
+
+Four thin surfaces sharing one extraction core:
+
+1. **Chrome extension (MV3)** — Mac + Windows desktop. FAB on every page + side panel.
+2. **iOS Safari bookmarklet** — also works in Mac Safari. Saves to Files / iCloud.
+3. **iOS Shortcut** — share-sheet integration on iPhone, saves to iCloud Drive.
+4. **Claude Code skill** — `~/.claude/skills/clipper/`, clip by pasting a URL in Claude Code.
+
+All four output the same markdown format (YAML frontmatter + content body) to the
+same iCloud/Dropbox folder.
+
+## Tech stack
+
+- TypeScript + Vite
+- React + Tailwind (side panel only)
+- `@mozilla/readability` for generic extraction
+- `turndown` for HTML→Markdown
+- `jsdom` for the Node side (skill + tests)
+- `chrome.storage.local` for the clip index
+- File System Access API for direct folder writes on desktop
+- Vitest for testing
+
+## Repo structure
+
+```
+clipper/
+├── shared/                  # Extraction + markdown + prompts (imported by all surfaces)
+│   ├── extractor.ts
+│   ├── adapters/            # x.ts, substack.ts, nyt.ts, generic.ts, index.ts (dispatcher)
+│   ├── markdown.ts          # Turndown config
+│   ├── frontmatter.ts       # YAML generation
+│   ├── prompts.ts           # 5 action prompts as named exports
+│   ├── slug.ts              # Filename slugification (handles CJK)
+│   ├── lang.ts              # EN / 中 / 日 detection
+│   ├── archive.ts           # archive.ph URL rewriter
+│   └── __tests__/           # Vitest tests against fixtures
+├── extension/               # Chrome MV3 extension
+├── bookmarklet/             # Bookmarklet (Safari iOS + Mac)
+├── ios-shortcut/            # Shortcut file + BUILD.md
+├── claude-code-skill/       # SKILL.md + clip.ts
+├── fixtures/                # Saved HTML snapshots for adapter tests
+└── CLAUDE.md / README.md
+```
+
+Path alias: `@shared/*` → `shared/*` (configured in `tsconfig.json` and
+`vite.config.ts`). Shared code is the source of truth — all surfaces import from
+it. Don't duplicate extraction logic.
+
+## Locked decisions (don't re-litigate)
+
+- **No backend.** Everything client-side or on Lawrence's devices. Markdown files
+  in iCloud/Dropbox are the source of truth.
+- **AI default:** open Claude.ai in a new tab with prompt + clipped content via
+  clipboard handoff. Optional Anthropic API key setting enables inline summaries.
+- **Aggressive paywall mode on by default.** Personal use. Extract from rendered
+  DOM regardless of CSS hiding/overlays. Optional `archive.ph` fallback for
+  server-gated content (off by default).
+- **File naming:** `YYYY-MM-DD-{slugified-title}-{source}.md`, single flat folder.
+- **Per-site adapters v1:** `x.com`, `substack`, `nyt`, plus generic Readability
+  fallback. Dispatcher tries domain-specific first, then generic.
+- **AI actions v1:** Summarize, Explain, Steel-man, Extract, Falsify. Plus
+  "Send to NotebookLM" (manual, downloads .md + opens NotebookLM).
+- **Languages:** English, Traditional Chinese, Japanese.
+- **State management:** plain `useState`. No Redux/Zustand. No auth. No telemetry.
+
+## Frontmatter schema
+
+```yaml
+---
+title: "Article title"
+url: https://example.com/path
+source: substack.com         # bare domain
+author: "Author name"        # "" if not extractable
+published: 2026-05-14        # "" if not extractable
+clipped: 2026-05-14T08:30:00+08:00
+lang: en                     # en | zh-Hant | zh-Hans | zh | ja | other
+adapter: substack            # which adapter handled it
+word_count: 1247
+tags: []
+---
+```
+
+## How to run
+
+```bash
+npm install
+npm test              # Vitest, against fixtures
+npm run typecheck     # tsc --noEmit
+npm run build:extension
+npm run build:bookmarklet
+```
+
+### Loading the extension unpacked
+
+1. `npm run build:extension`
+2. Chrome → `chrome://extensions` → enable "Developer mode"
+3. "Load unpacked" → select `extension/dist/`
+
+The build orchestrator (`extension/build.mjs`) produces:
+
+- `background.js` (ESM service worker, esbuild)
+- `content.js` (IIFE content script, esbuild)
+- `sidepanel.html` + `assets/` (Vite + React + Tailwind)
+- `manifest.json` (copied verbatim)
+
+## Current phase
+
+**v1 daily-driver ready.** All ten phases built; pending only in-browser /
+real-device smoke tests by Lawrence. Final commit closes Phase 10.
+
+**Phase 10 complete.** Polish:
+
+- Keyboard shortcut: Cmd+Shift+K (mac) / Ctrl+Shift+K (windows) opens the
+  side panel on the active tab. Wired via the manifest `commands` section
+  and `chrome.commands.onCommand` in `background.ts`.
+- Right-click context menu: "Clip with Clipper" on `page`, `selection`,
+  `link`, and `image` contexts. Same handler as the keyboard shortcut.
+- Per-site FAB hide list: `fabHideHosts: string[]` in
+  `chrome.storage.local`. Content script reads it before mounting the
+  FAB. Options page has a chip-style editor with an add input. Keyboard
+  shortcut and context menu still work on hidden sites.
+- Lang detection: `zh` is now refined to `zh-Hant` / `zh-Hans` via a
+  distinctive-character heuristic in `shared/lang.ts`. Falls back to
+  `zh` only when no distinctive chars are found. The frontmatter `lang`
+  field's union expands accordingly; existing `"zh"` clips remain valid.
+- Top-level `README.md` rewritten as the install + usage guide for all
+  four surfaces.
+
+**Tests:** 47 passing (was 46 — added Simplified Chinese test).
+**Builds:** all four (`extension`, `bookmarklet`, `shortcut`, `skill`) ✅.
+
+## v1 status by phase
+
+| Phase | What | Status |
+|---|---|---|
+| 0 | Bootstrap | ✅ committed |
+| 1 | Shared extraction core | ✅ tested |
+| 2 | Chrome extension MVP (FAB, side panel, copy/download) | ✅ built, needs in-browser smoke test |
+| 3 | File System Access API integration | ✅ built, needs in-browser smoke test |
+| 4 | AI actions (Claude.ai handoff + optional API key) | ✅ built, needs in-browser smoke test |
+| 5 | Per-site adapters (X, Substack, NYT, archive.ph) | ✅ tested, needs live-site spot-check |
+| 6 | Library + search | ✅ built, needs in-browser smoke test |
+| 7 | Bookmarklet (Safari iOS + Mac) | ✅ built, needs in-Safari smoke test |
+| 8 | iOS Shortcut | ✅ payload + BUILD.md, needs real-iOS rebuild |
+| 9 | Claude Code skill | ✅ sandbox-smoke-tested, needs Mac verification |
+| 10 | Polish | ✅ shipped |
+
+## Known issues / things to fix next
+
+- **Fixtures are synthetic.** Per-site adapter behavior on real X /
+  Substack / NYT pages is unverified end-to-end. Capture failures as
+  you find them and refine the selectors.
+- **Substack footnote definitions** are best-effort — refs always become
+  `[^N]`, but definitions only emit when the `.footnote` container sits
+  inside `.body.markup`. Many real posts wrap definitions in a sibling
+  element.
+- **X quote tweets via nested `<article>`** — works on the simple thread
+  view. Real X often wraps quotes in non-`article` containers; capture
+  the live DOM and add a selector when this breaks.
+- **NYT server-gated content** can't be helped from inside the page —
+  toggle archive.ph in options.
+- **iOS Shortcut updates require manual paste.** Each `payload.js`
+  change needs to be re-pasted into the Shortcuts action; there's no
+  in-place update.
+- **No icon.** Chrome shows the puzzle-piece. Cosmetic only.
+
+---
+
+**Phase 9 complete.** Claude Code skill:
+
+- `claude-code-skill/clip.ts` — Node entry. Validates URL → `fetch()` with
+  desktop Safari UA → JSDOM → shared `extract()` → writes to
+  `~/Library/Mobile Documents/com~apple~CloudDocs/Clipper/` (override via
+  `$CLIPPER_DIR`). Filename collisions get `-2/-3/…`. Stdout is one
+  pretty-printed JSON status object; errors go to stderr with non-zero
+  exit.
+- `claude-code-skill/build.mjs` — esbuild → ESM Node bundle at
+  `claude-code-skill/clip.mjs` (~15KB; shared inlined, jsdom +
+  readability + turndown kept external so they load from node_modules
+  at runtime). Adds `#!/usr/bin/env node` shebang and chmod +x.
+- `claude-code-skill/package.json` — declares the three runtime deps;
+  `npm install` after the user copies the folder pulls them in.
+- `claude-code-skill/SKILL.md` — frontmatter with the `name` and
+  `description` Claude Code uses for skill discovery, plus a body
+  describing invocation, JSON output schema, install, and when *not*
+  to use this skill (vs `WebFetch` for read-only analysis).
+- `package.json` (root) — `npm run build:skill` wired in.
+
+**Smoke test ran end-to-end in a sandbox** against a local
+`python3 -m http.server` serving the generic-blog fixture: fetch +
+extract + write all worked; the on-disk markdown matched the extension's
+output. Network egress to real sites is blocked from this Claude Code
+session so the Stratechery acceptance test is left to Lawrence.
+
+**Acceptance (needs Mac verification):**
+
+- Install: `cp -r claude-code-skill ~/.claude/skills/clipper && cd
+  ~/.claude/skills/clipper && npm install`.
+- In a fresh Claude Code session, paste "clip this URL:
+  https://stratechery.com/2025/some-post" → skill fires → file appears
+  in `~/Library/Mobile Documents/com~apple~CloudDocs/Clipper/`.
+
+**Next: Phase 10 — polish (keyboard shortcut, context menu, hide list,
+README, screenshots).**
+
+---
+
+**Phase 8 complete.** iOS Shortcut payload + reproducible build doc:
+
+- `ios-shortcut/src/payload.ts` — runs in the live Safari tab via the
+  Shortcuts "Run JavaScript on Web Page" action. Uses the shared
+  `extract()` + `slugify()`, then calls Apple's `completion()` callback
+  with a JSON string `{ filename, markdown }` (or `{ error }`).
+- `ios-shortcut/build.js` — esbuild → self-contained IIFE,
+  `ios-shortcut/dist/payload.js` (~57 KB minified, `keepNames: true` so
+  the free `completion` reference isn't renamed).
+- `ios-shortcut/BUILD.md` — durable step-by-step to build the Shortcut
+  from scratch in the iPhone Shortcuts app (share-sheet trigger →
+  Run JS on Web Page → Get Dictionary → 2× Get Dictionary Value →
+  Save File to `iCloud Drive/Clipper/` with custom filename). Includes
+  troubleshooting + how to export the binary `.shortcut` as a backup.
+- `package.json` — `npm run build:shortcut` wired in.
+
+**Deviation from spec, documented in BUILD.md:** The plan called for
+"Get Current URL from Safari → Get Contents of URL → Run JavaScript on
+Web Page". That chain doesn't actually compose — "Run JavaScript on Web
+Page" requires a live Safari tab, not a fetched HTML string. The
+share-sheet trigger flow (which gets the live tab as input directly) is
+the standard, less-fragile pattern.
+
+**Acceptance (needs real iOS verification):**
+
+- Share sheet on an article in Safari → tap Clipper → no error.
+- File appears in `iCloud Drive/Clipper/` named
+  `YYYY-MM-DD-{slug}-{source}.md` with valid frontmatter.
+
+**Next: Phase 9 — Claude Code skill.**
+
+---
+
+**Phase 7 complete.** Safari bookmarklet:
+
+- `bookmarklet/src/loader.ts` — the `javascript:` payload. Calls
+  `window.open()` synchronously to preserve the user gesture (iOS Safari
+  rule), then injects `<script src=…/main.js>` into the host page and
+  hands the script the opened-window reference + a UUID via a global
+  `window.__clipper.run(target, uuid)` hook.
+- `bookmarklet/src/main.ts` — runs in the host-page context. Uses the
+  shared `extract()` pipeline, then `postMessage`s the markdown +
+  frontmatter + filename to the result tab. Retries every 250ms (up to
+  ~5s) until acked or the target tab closes.
+- `bookmarklet/result-page.html` + `bookmarklet/src/result.ts` — the
+  result tab. Listens for the `clipper-payload` message, caches in
+  `sessionStorage` keyed by the URL's UUID hash (so a refresh restores
+  the view), shows title / metadata / raw markdown, with Copy / Save
+  to Files / Open in Claude.ai buttons. The Save button triggers a
+  blob download — on iOS Safari that opens the share sheet which
+  includes "Save to Files" → iCloud Drive.
+- `bookmarklet/setup-page.html` — the install page. Drag the link to
+  the bookmarks bar on Mac; manual URL-paste instructions for iPhone.
+- `bookmarklet/build.js` — esbuild-based orchestrator. Three IIFE
+  bundles: `main.js` (with shared core), `result.js`, and the
+  loader (minified, URL-encoded, wrapped as `javascript:`). The
+  loader's host URL is injected at build time via `__HOST__` (override
+  with `CLIPPER_BOOKMARKLET_HOST`).
+
+Default hosting URL is `https://lawrencexwu.github.io/clipper/`. To
+publish: copy `bookmarklet/dist/` to that GitHub Pages site.
+Bookmarklet URL is **879 chars**, well under any browser limit.
+
+**Acceptance (needs real-Safari verification):**
+
+- Mac Safari: drag the link from `setup.html` to favorites bar. Visit
+  an article. Click bookmark. New tab opens with the clipped markdown.
+  Copy / Save / Claude.ai handoff all work.
+- iPhone Safari: install via the manual paste instructions. Tap the
+  bookmark on an article. New tab. Save → share sheet → Save to Files
+  → iCloud Drive lands the `.md`.
+
+**Next: Phase 8 — iOS Shortcut.**
+
+---
+
+**Phase 6 complete.** Library + search:
+
+- `shared/frontmatter.ts` — new `parseFrontmatter(markdown)` round-trips
+  every field `buildFrontmatter` emits (5 new tests). Unwraps quoted
+  scalars, parses inline arrays, handles empty `published`.
+- `extension/src/lib/library.ts` — clip index in `chrome.storage.local`
+  under `library.clips`. CRUD: `addClip`, `removeClip`, `updateClipMeta`,
+  `listClips`. Pure helpers: `applyFilters` (substring match across
+  title/source/author/tags + source/lang filters), `uniqueValues` (chip
+  bucket counts).
+- `extension/src/lib/fs.ts` — `readClip(dir, filename)` opens the file and
+  parses its frontmatter; `rewriteFrontmatter(dir, filename, nextFm)` reads,
+  swaps the frontmatter block, and writes back, preserving the body.
+- `extension/src/sidepanel/App.tsx` — header now has Current / Library
+  tabs. Save flow appends `ClipMeta` to the index after a successful disk
+  write. Library tab renders search input, source + lang filter chips
+  with counts, and a list of clips (newest first via insertion order in
+  the index). Clicking a row opens a viewer with the on-disk markdown,
+  a tag editor (chip UI with `+` input, Save button appears when dirty),
+  and a "Remove from library index" link.
+
+**Acceptance (real-Chrome verification):**
+
+- Clip 20+ articles across different sources. They appear in Library
+  newest-first.
+- Search filters by title / source / author / tag fragments.
+- Source + lang filter chips narrow the list.
+- Click a clip → loads markdown from disk → preview matches what got
+  saved.
+- Add a tag, click Save → file on disk has the new tag in frontmatter,
+  list entry shows the chip.
+
+**Next: Phase 7 — bookmarklet (Safari iOS + Mac).**
+
+---
+
+**Phase 5 complete.** Per-site adapters + archive.ph fallback:
+
+- `shared/adapters/x.ts` — `x.com` / `twitter.com`. Walks
+  `article[data-testid="tweet"]` chains filtered to the URL's handle.
+  Output: numbered paragraphs (skips prepending a number when the tweet
+  already starts with `N/`), images preserved as `<img>` (avatars/profile
+  pics filtered), quote tweets as `<blockquote>@author: text</blockquote>`.
+- `shared/adapters/substack.ts` — `*.substack.com` and any site that
+  declares `<meta name="generator" content="Substack">`. Extracts from
+  `.body.markup`, prepends `<h2>` subtitle if `.subtitle` is present,
+  rewrites `.footnote-anchor` refs to `[^N]` with definitions appended
+  (pass-through when no footnote markup).
+- `shared/adapters/nyt.ts` — `nytimes.com`. Clones the doc, strips
+  `[data-testid*=paywall]` / `[id*=gateway]` / `[class*=paywall|gateway]`
+  before extracting `section[name="articleBody"]`. Byline from
+  `meta[name="byl"]` (NYT-specific) or `[data-testid="byline"]`, stripping
+  the leading "By".
+- `shared/archive.ts` — `archivePhUrl()` rewrites to
+  `https://archive.ph/newest/{url}`; `shouldOfferArchive(n)` thresholds at
+  200 words.
+- `shared/adapters/index.ts` — dispatcher registers x → substack → nyt,
+  falls back to generic.
+- `extension/src/sidepanel/App.tsx` — when extraction is sparse
+  (<200 words) AND the archive fallback setting is on, shows a yellow
+  banner with an "Open archive.ph" link.
+- `extension/src/options/Options.tsx` — new "archive.ph fallback" section
+  with a checkbox (off by default).
+
+**Test coverage:** 11 new adapter tests, 41 total. Each adapter validated
+end-to-end via `extract()` + against its fixture. URL matchers checked
+for hostname edge cases (`nytimes.example.com` rejected, `www.x.com` and
+`twitter.com` accepted, `bob.substack.com` and meta-generator-detected
+custom domains both detected).
+
+**Acceptance (needs real-Chrome verification on 5+ live pages each):**
+
+- X: open a thread by the original author. Side panel should show
+  numbered paragraphs, no replies from other users mixed in.
+- Substack: open a free post on a `.substack.com` domain and a
+  custom-domain Substack site. Both should show the substack adapter
+  badge in the preview header.
+- NYT: open a paywalled article. CSS-overlay paywalls should be stripped;
+  server-gated content (truncated HTML) will return a short clip — toggle
+  archive.ph fallback in options to get the "Open archive.ph" button.
+
+**Next: Phase 6 — library + search.**
+
+- `shared/prompts.ts` — 5 default action prompts (`summarize`, `explain`,
+  `steelman`, `extract`, `falsify`) as named exports + `DEFAULTS` map +
+  `PROMPT_LABELS`
+- `extension/src/lib/settings.ts` — `chrome.storage.local` wrapper for the
+  Anthropic API key + per-prompt overrides; `resolvePrompt(key)` returns the
+  override or the default
+- `extension/src/lib/ai.ts`
+  - `claudeAiHandoff(prompt, markdown)` — copies `prompt\n\n---\n\nmarkdown`
+    to clipboard, opens `https://claude.ai/new` in a new tab
+  - `notebookLmHandoff(filename, markdown)` — downloads the `.md`, opens
+    `https://notebooklm.google.com/`
+  - `streamFromAnthropic(apiKey, prompt, markdown, {onDelta, signal})` —
+    raw `fetch` to `api.anthropic.com/v1/messages` with `stream: true`,
+    `thinking: {type: "adaptive"}`, `cache_control` on the article body so
+    repeat actions on the same clip get cache hits. Headers include
+    `anthropic-dangerous-direct-browser-access: true`. Model: `claude-opus-4-7`.
+- `extension/src/sidepanel/App.tsx` — new AI button row (5 prompts +
+  NotebookLM). No API key → Claude.ai handoff with toast. With API key →
+  inline streaming panel in the side panel with Stop / Close buttons and
+  token usage line at the bottom (input / output / cached). One in-flight
+  stream at a time; new click aborts the previous.
+- `extension/src/options/Options.tsx` — three new sections: Anthropic API key
+  (password input with reveal/save/clear), 5 prompt-override text areas
+  (per-prompt Save + Reset-to-default, "(overridden)" tag when active), and
+  notes. Folder section unchanged.
+
+**Acceptance (needs real-Chrome verification):**
+
+- All 5 actions copy the right `{prompt}\n\n---\n\n{markdown}` payload to
+  the clipboard and open Claude.ai in a new tab.
+- Custom prompts entered in options are used by the actions.
+- With an API key set, Summarize streams inline in the side panel and
+  reports input / output / cached token usage at the end.
+- NotebookLM downloads the `.md` and opens NotebookLM.
+
+**Next: Phase 5 — per-site adapters (X, Substack, NYT, archive.ph fallback).**
+
+## Phases (high-level)
+
+0. Bootstrap ✅
+1. Shared extraction core (generic Readability, markdown, frontmatter, slug, lang, tests) ✅
+2. Chrome extension MVP (FAB, side panel, copy/download) — build ✅, pending in-browser smoke test
+3. File System Access API integration (auto-save to chosen folder) — build ✅, pending in-browser smoke test
+4. AI actions (Claude.ai handoff + optional API key) — build ✅, pending in-browser smoke test
+5. Per-site adapters (X, Substack, NYT, archive.ph) — build ✅, pending in-browser smoke test
+6. Library + search (clip index, search/filter, tag editing) — build ✅, pending in-browser smoke test
+7. Bookmarklet (Safari iOS + Mac) — build ✅, pending in-Safari smoke test
+8. iOS Shortcut — payload ✅ + BUILD.md ✅, pending real-iOS verification
+9. Claude Code skill — build ✅ (sandbox-smoke-tested), pending Mac verification
+10. Polish (keyboard shortcut, context menu, hide list, README) — ✅ shipped
+
+## Working style
+
+- Use `TodoWrite` to track sub-tasks within each phase.
+- Ask before advancing phases. Show what's done, acceptance result, request greenlight.
+- Commit at every phase boundary: `phase N: <summary>`.
+- Test on real sites, not just fixtures. After fixtures pass, browse 5+ real
+  sites per surface and find what breaks.
+- Update this file at the end of each phase: what's done, what's next, gotchas.
+- Don't pre-build for hypothetical needs.
+
+## Gotchas / known issues
+
+- **Fixtures are synthetic.** They mimic real DOM structures but were authored
+  for this repo, not scraped. After each adapter lands, re-test on 5+ live
+  pages and capture failures.
+- **Substack footnote conversion is best-effort.** Refs become `[^N]` and
+  definitions are appended only when a `.footnote` / `.footnote-body`
+  container is present in the body. Real Substack often renders footnote
+  bodies in a separate wrapper outside `.body.markup` — when that happens we
+  emit `[^N]` refs without definitions. Verify on a footnote-heavy post and
+  refine the selector list as needed.
+- **X quote tweets via nested `<article>`.** The adapter scans
+  `article :scope article` for quotes, which works on the simple thread view.
+  Real X often wraps quotes in non-`article` containers; if a thread with
+  quotes loses them, capture the live DOM and add a selector.
+- **NYT server-gated content.** The adapter only handles the CSS-hidden
+  overlay case. Articles whose body is truncated server-side will produce a
+  short clip — enable `archive.ph` fallback in options.
